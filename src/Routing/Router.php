@@ -159,6 +159,17 @@ class Router
     protected static array $_routePaths = [];
 
     /**
+     * Whether the application's routes have been loaded into the collection.
+     *
+     * Used as an O(1) guard in worker environments (e.g. FrankenPHP) to skip
+     * re-loading routes on every request without iterating the route collection.
+     * Reset by reload() (via $_initialState) and explicitly by resetRoutes().
+     *
+     * @var bool
+     */
+    protected static bool $_routesLoaded = false;
+
+    /**
      * Get or set default route class.
      *
      * @param string|null $routeClass Class name.
@@ -269,6 +280,31 @@ class Router
     {
         static::$_collection = new RouteCollection();
         static::$_urlFilters = [];
+        static::$_routesLoaded = false;
+    }
+
+    /**
+     * Check whether the application routes have been loaded.
+     *
+     * @return bool
+     */
+    public static function routesLoaded(): bool
+    {
+        return static::$_routesLoaded;
+    }
+
+    /**
+     * Mark the application routes as loaded.
+     *
+     * Called by RoutingMiddleware after routes have been registered so that
+     * subsequent requests in a long-running worker process skip the
+     * route-loading step.
+     *
+     * @return void
+     */
+    public static function setRoutesLoaded(): void
+    {
+        static::$_routesLoaded = true;
     }
 
     /**

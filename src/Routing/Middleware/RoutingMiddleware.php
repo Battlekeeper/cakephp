@@ -64,15 +64,25 @@ class RoutingMiddleware implements MiddlewareInterface
     /**
      * Trigger the application's and plugin's routes() hook.
      *
+     * This method is idempotent: when running in FrankenPHP worker mode the
+     * same middleware instance may be recreated each request but the underlying
+     * `Router` state persists across requests. If routes are already present
+     * in the route collection they will not be added again, preventing
+     * duplicate routes from accumulating over the lifetime of a worker process.
+     *
      * @return void
      */
     protected function loadRoutes(): void
     {
+        if (Router::routesLoaded()) {
+            return;
+        }
         $builder = Router::createRouteBuilder('/');
         $this->app->routes($builder);
         if ($this->app instanceof PluginApplicationInterface) {
             $this->app->pluginRoutes($builder);
         }
+        Router::setRoutesLoaded();
     }
 
     /**

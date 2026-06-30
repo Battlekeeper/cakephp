@@ -1,0 +1,87 @@
+# FrankenPHP Caddyfile for CakePHP
+#
+# Copy this file to your project root (next to composer.json) and run:
+#
+#   frankenphp run
+#
+# For development with auto-reload on file changes:
+#
+#   frankenphp run --watch
+#
+# For Docker:
+#
+#   docker run \
+#       -v $PWD:/app \
+#       -p 80:80 -p 443:443 -p 443:443/udp \
+#       dunglas/frankenphp
+#
+# See https://frankenphp.dev/docs/config/ for all available options.
+
+{
+    # Enable FrankenPHP
+    frankenphp
+
+    # Uncomment to set a Let's Encrypt contact email for automatic TLS certs
+    # email admin@example.com
+}
+
+# -----------------------------------------------------------------------
+# Replace "localhost" with your actual domain. FrankenPHP will
+# automatically obtain and renew a TLS certificate for public domains.
+# For local development, it uses a self-signed certificate.
+# -----------------------------------------------------------------------
+localhost {
+    # Serve files from the application's webroot directory.
+    # Adjust this path to match your project layout.
+    root * /path/to/your/app/webroot
+
+    # Enable brotli, zstandard, and gzip compression.
+    encode zstd br gzip
+
+    # ----------------------------------------------------------------
+    # FrankenPHP PHP server with worker mode
+    #
+    # The worker boots CakePHP once and handles all subsequent requests
+    # in memory, avoiding the per-request bootstrap overhead.
+    #
+    # The worker script is the index.php from frankenphp/worker.php
+    # copied to (or referenced from) webroot/index.php.
+    # ----------------------------------------------------------------
+    php_server {
+        worker {
+            file index.php
+
+            # Number of workers to start.
+            # Defaults to 2× the number of available CPU cores.
+            # num 4
+
+            # Restart workers after N requests to mitigate memory leaks.
+            # Alternatively, set the MAX_REQUESTS env var in worker.php.
+            # env MAX_REQUESTS 500
+
+            # Uncomment to watch for PHP file changes and restart workers
+            # automatically. Useful in development; remove in production.
+            # watch
+        }
+    }
+}
+
+# -----------------------------------------------------------------------
+# Production example with explicit HTTP→HTTPS redirect and separate
+# access/error log paths.
+# -----------------------------------------------------------------------
+# example.com {
+#     root * /var/www/app/webroot
+#     encode zstd br gzip
+#     log {
+#         output file /var/log/frankenphp/access.log
+#         format json
+#     }
+#     php_server {
+#         worker {
+#             file index.php
+#             num 8
+#             env MAX_REQUESTS 1000
+#         }
+#     }
+# }

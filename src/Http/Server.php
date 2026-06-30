@@ -46,6 +46,16 @@ class Server implements EventDispatcherInterface
     protected HttpApplicationInterface $app;
 
     /**
+     * Whether the application has already been bootstrapped.
+     *
+     * Used by FrankenPHP worker mode to ensure bootstrap only runs once
+     * per worker process regardless of how many requests are handled.
+     *
+     * @var bool
+     */
+    protected bool $bootstrapped = false;
+
+    /**
      * Constructor
      *
      * @param \Cake\Core\HttpApplicationInterface $app The application to use.
@@ -110,10 +120,18 @@ class Server implements EventDispatcherInterface
      * Calls the application's `bootstrap()` hook. After the application the
      * plugins are bootstrapped.
      *
+     * This method is idempotent: when running in FrankenPHP worker mode the
+     * same `Server` instance handles many requests, so bootstrap must only
+     * execute once. Subsequent calls are silently skipped.
+     *
      * @return void
      */
     protected function bootstrap(): void
     {
+        if ($this->bootstrapped) {
+            return;
+        }
+        $this->bootstrapped = true;
         $this->app->bootstrap();
         if ($this->app instanceof PluginApplicationInterface) {
             $this->app->pluginBootstrap();

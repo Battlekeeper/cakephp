@@ -81,9 +81,13 @@ class ControllerFactory implements ControllerFactoryInterface, RequestHandlerInt
         if ($reflection->isAbstract()) {
             throw $this->missingController($request);
         }
+        // Pass overwrite=true so that in long-running environments (e.g.
+        // FrankenPHP worker mode) the previously cached shared instance is
+        // discarded and a fresh ComponentRegistry is used for each request.
         $this->container->addShared(
             ComponentRegistry::class,
             new ComponentRegistry(container: $this->container),
+            true,
         );
 
         // Get the controller from the container if defined.
