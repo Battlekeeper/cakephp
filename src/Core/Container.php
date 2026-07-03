@@ -25,4 +25,16 @@ use League\Container\Container as LeagueContainer;
  */
 class Container extends LeagueContainer implements ContainerInterface
 {
+    /**
+     * Remove a service definition from the container.
+     *
+     * @param string $id The service id to remove.
+     * @return void
+     */
+    public function remove(string $id): void
+    {
+        if (method_exists($this->definitions, 'remove')) {
+            $this->definitions->remove($id);
+        }
+    }
 }

@@ -344,8 +344,10 @@ abstract class BaseApplication implements
         ServerRequestInterface $request,
     ): ResponseInterface {
         $container = $this->getContainer();
-        $container->add(ServerRequest::class, $request);
-        $container->add(ContainerInterface::class, $container);
+        $container->add(ServerRequest::class, $request, true);
+        if (!$container->has(ContainerInterface::class)) {
+            $container->add(ContainerInterface::class, $container);
+        }
 
         $eventManager = $this->events($this->getEventManager());
         $this->setEventManager($this->pluginEvents($eventManager));

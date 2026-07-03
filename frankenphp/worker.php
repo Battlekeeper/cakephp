@@ -39,6 +39,21 @@ declare(strict_types=1);
  *
  *   FRANKENPHP_CONFIG="worker /app/webroot/index.php" MAX_REQUESTS=500 frankenphp run
  *
+ * ## Persistent process state
+ *
+ * Worker mode keeps the PHP process alive between requests. This is what makes
+ * worker mode fast, but it also means process-level state persists across
+ * requests, including:
+ *
+ * - Static variables declared inside functions or methods.
+ * - Class static properties.
+ * - Global variables in this worker script.
+ * - In-memory caches stored outside the request handler.
+ *
+ * Avoid storing request-specific data in persistent state. If your application
+ * or services do hold request-specific state, reset it by listening to the
+ * `Server.resetState` event that this script triggers after each request.
+ *
  * @see https://frankenphp.dev/docs/worker/
  */
 
@@ -78,6 +93,21 @@ if (function_exists('frankenphp_handle_request')) {
             http_response_code(500);
             echo 'An Internal Server Error Occurred';
             error_log((string)$e);
+        } finally {
+            // Reset request-scoped framework state (I18n locale, Router request
+            // context) and fire the Server.resetState event so application code
+            // can reset its own per-request state.
+            //
+            // This runs even when an exception was thrown so that a failed
+            // request cannot corrupt the state seen by the next request.
+            //
+            // To reset your own services, listen to 'Server.resetState' in
+            // your Application::bootstrap():
+            //
+            //   EventManager::instance()->on('Server.resetState', function () {
+            //       MyService::reset();
+            //   });
+            $server->resetWorkerState();
         }
     };
 

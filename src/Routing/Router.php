@@ -221,9 +221,16 @@ class Router
 
         static::$_requestContext['_base'] = $request->getAttribute('base', '');
         static::$_requestContext['params'] = $request->getAttribute('params', []);
-        static::$_requestContext['_scheme'] ??= $uri->getScheme();
-        static::$_requestContext['_host'] ??= $uri->getHost();
-        static::$_requestContext['_port'] ??= $uri->getPort();
+        if (Configure::read('App.fullBaseUrl')) {
+            static::$_requestContext['_scheme'] ??= $uri->getScheme();
+            static::$_requestContext['_host'] ??= $uri->getHost();
+            static::$_requestContext['_port'] ??= $uri->getPort();
+        } else {
+            static::$_requestContext['_scheme'] = $uri->getScheme();
+            static::$_requestContext['_host'] = $uri->getHost();
+            static::$_requestContext['_port'] = $uri->getPort();
+            static::$_fullBaseUrl = null;
+        }
     }
 
     /**
@@ -305,6 +312,27 @@ class Router
     public static function setRoutesLoaded(): void
     {
         static::$_routesLoaded = true;
+    }
+
+    /**
+     * Clear the current request reference and request-specific context.
+     *
+     * Called by Server::resetWorkerState() between requests in a FrankenPHP
+     * worker process so that terminate-event handlers and any other code
+     * running outside of a request context cannot accidentally read stale
+     * data from the previous request.
+     *
+     * @return void
+     */
+    public static function clearRequest(): void
+    {
+        static::$_request = null;
+        static::$_requestContext['params'] = [];
+        static::$_requestContext['_base'] = '';
+        static::$_requestContext['_scheme'] = null;
+        static::$_requestContext['_host'] = null;
+        static::$_requestContext['_port'] = null;
+        static::$_fullBaseUrl = null;
     }
 
     /**
@@ -602,8 +630,6 @@ class Router
                 if (!empty(static::$_requestContext['_port'])) {
                     $base .= ':' . static::$_requestContext['_port'];
                 }
-
-                Configure::write('App.fullBaseUrl', $base);
 
                 return static::$_fullBaseUrl = $base;
             }

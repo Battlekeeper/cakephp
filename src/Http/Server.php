@@ -23,6 +23,7 @@ use Cake\Event\EventDispatcherInterface;
 use Cake\Event\EventDispatcherTrait;
 use Cake\Event\EventManager;
 use Cake\Event\EventManagerInterface;
+use Cake\I18n\I18n;
 use Cake\Routing\Router;
 use InvalidArgumentException;
 use Psr\Http\Message\ResponseInterface;
@@ -170,6 +171,75 @@ class Server implements EventDispatcherInterface
             $request = Router::getRequest();
         }
         $this->dispatchEvent('Server.terminate', compact('request', 'response'));
+    }
+
+    /**
+     * Reset request-scoped framework state after a worker request completes.
+     *
+     * In long-running environments such as FrankenPHP worker mode the same PHP
+     * process handles many requests. State mutated during one request must be
+     * restored before the next request begins to prevent cross-request leaks.
+     *
+     * This method resets the known framework-level state:
+     *
+     * - **I18n locale** - applications frequently change the active locale
+     *   per-request (e.g. via `LocaleSelectorMiddleware`). The locale is
+     *   restored to the value that was current when the worker first booted.
+     * - **Router request context** - the stale `ServerRequest` reference and
+     *   request-specific routing parameters are cleared.
+     * - **Container request binding** - the request object registered in the
+     *   application container is removed when the container supports removal.
+     *
+     * It also fires the `Server.resetState` event, giving applications and
+     * plugins the opportunity to reset their own request-scoped state:
+     *
+     * ```php
+     * // In your Application::bootstrap() or a plugin boot method:
+     * EventManager::instance()->on('Server.resetState', function () {
+     *     MyService::resetForNextRequest();
+     * });
+     * ```
+     *
+     * Call this method from your worker script's `finally` block:
+     *
+     * ```php
+     * $handler = static function () use (\$server): void {
+     *     try {
+     *         \$server->emit(\$server->run());
+     *     } finally {
+     *         \$server->resetWorkerState();
+     *     }
+     * };
+     * ```
+     *
+     * @return void
+     */
+    public function resetWorkerState(): void
+    {
+        // Restore the I18n locale to whatever it was when the application
+        // first booted. I18n::getDefaultLocale() captures the initial value
+        // lazily on first call and never changes it, so this always restores
+        // to the pre-request locale regardless of what setLocale() was called
+        // with during the request.
+        if (class_exists(I18n::class, false)) {
+            I18n::setLocale(I18n::getDefaultLocale());
+        }
+
+        // Clear the stale request reference so that any code running after
+        // the response has been sent (e.g. terminate-event handlers) cannot
+        // accidentally read data from the previous request.
+        Router::clearRequest();
+
+        if ($this->app instanceof ContainerApplicationInterface) {
+            $container = $this->app->getContainer();
+            if (method_exists($container, 'remove')) {
+                $container->remove(ServerRequest::class);
+            }
+        }
+
+        // Allow applications and plugins to reset their own request-scoped
+        // state. Listeners should be registered in bootstrap(), not per-request.
+        $this->dispatchEvent('Server.resetState');
     }
 
     /**

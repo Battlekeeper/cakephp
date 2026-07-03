@@ -27,6 +27,8 @@ use Cake\Http\ResponseEmitter;
 use Cake\Http\Server;
 use Cake\Http\ServerRequest;
 use Cake\Http\Session;
+use Cake\I18n\I18n;
+use Cake\Routing\Router;
 use Cake\TestSuite\TestCase;
 use InvalidArgumentException;
 use Laminas\Diactoros\Response as LaminasResponse;
@@ -420,5 +422,46 @@ class ServerTest extends TestCase
         $server->emit(new Response(), $emitter);
 
         $this->assertTrue($triggered);
+    }
+
+    public function testResetWorkerState(): void
+    {
+        $originalLocale = I18n::getLocale();
+
+        try {
+            $request = new ServerRequest([
+                'url' => '/articles/view/1',
+                'params' => [
+                    'controller' => 'Articles',
+                    'action' => 'view',
+                    'pass' => ['1'],
+                ],
+            ]);
+            Router::setRequest($request);
+
+            I18n::setLocale('fr_FR');
+
+            $app = new MiddlewareApplication($this->config);
+            $app->getContainer()->add(ServerRequest::class, $request);
+
+            $server = new Server($app);
+            $triggered = false;
+            $server->getEventManager()->on(
+                'Server.resetState',
+                function (EventInterface $event) use (&$triggered): void {
+                    $triggered = true;
+                },
+            );
+
+            $server->resetWorkerState();
+
+            $this->assertSame(I18n::getDefaultLocale(), I18n::getLocale());
+            $this->assertNull(Router::getRequest());
+            $this->assertFalse($app->getContainer()->has(ServerRequest::class));
+            $this->assertTrue($triggered);
+        } finally {
+            I18n::setLocale($originalLocale);
+            Router::reload();
+        }
     }
 }

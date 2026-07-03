@@ -162,6 +162,28 @@ class RouterTest extends TestCase
         $this->assertSame('http://cake.local', Router::fullBaseUrl());
     }
 
+    public function testRequestContextUpdatesBetweenWorkerRequests(): void
+    {
+        $originalFullBaseUrl = Configure::read('App.fullBaseUrl');
+
+        try {
+            Configure::write('App.fullBaseUrl', false);
+
+            $request = ServerRequestFactory::fromGlobals(['HTTP_HOST' => 'first.example']);
+            Router::setRequest($request);
+            $this->assertSame('http://first.example/', Router::url('/', true));
+
+            Router::clearRequest();
+
+            $request = ServerRequestFactory::fromGlobals(['HTTP_HOST' => 'second.example']);
+            Router::setRequest($request);
+            $this->assertSame('http://second.example/', Router::url('/', true));
+            $this->assertFalse(Configure::read('App.fullBaseUrl'));
+        } finally {
+            Configure::write('App.fullBaseUrl', $originalFullBaseUrl);
+        }
+    }
+
     /**
      * testRouteExists method
      */
