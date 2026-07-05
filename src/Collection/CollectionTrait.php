@@ -790,8 +790,8 @@ trait CollectionTrait
             $mapReduce->emitIntermediate($id, $parentId);
         };
 
-        $reducer = function ($values, $key, MapReduce $mapReduce) use (&$parents, &$isObject, $nestingKey) {
-            static $foundOutType = false;
+        $foundOutType = false;
+        $reducer = function ($values, $key, MapReduce $mapReduce) use (&$parents, &$isObject, &$foundOutType, $nestingKey) {
             if (!$foundOutType) {
                 $isObject = is_object(current($parents));
                 $foundOutType = true;

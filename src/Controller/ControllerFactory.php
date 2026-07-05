@@ -48,9 +48,16 @@ class ControllerFactory implements ControllerFactoryInterface, RequestHandlerInt
     protected ContainerInterface $container;
 
     /**
-     * @var \Cake\Controller\Controller
+     * The controller currently being invoked.
+     *
+     * Typed as nullable so that the reference is released after each request,
+     * allowing the controller — and all objects it holds (request, response,
+     * components, view-builder, event manager) — to be garbage-collected
+     * promptly in long-lived worker-mode processes (e.g. FrankenPHP).
+     *
+     * @var \Cake\Controller\Controller|null
      */
-    protected Controller $controller;
+    protected ?Controller $controller = null;
 
     /**
      * Constructor
@@ -133,16 +140,24 @@ class ControllerFactory implements ControllerFactoryInterface, RequestHandlerInt
     {
         $this->controller = $controller;
 
-        $middlewares = $controller->getMiddleware();
+        try {
+            $middlewares = $controller->getMiddleware();
 
-        if ($middlewares) {
-            $middlewareQueue = new MiddlewareQueue($middlewares, $this->container);
-            $runner = new Runner();
+            if ($middlewares) {
+                $middlewareQueue = new MiddlewareQueue($middlewares, $this->container);
+                $runner = new Runner();
 
-            return $runner->run($middlewareQueue, $controller->getRequest(), $this);
+                return $runner->run($middlewareQueue, $controller->getRequest(), $this);
+            }
+
+            return $this->handle($controller->getRequest());
+        } finally {
+            // Release the controller reference so that the controller and all
+            // objects it holds (request, response, components, view-builder,
+            // event manager) can be garbage-collected between requests in
+            // long-lived worker-mode processes (e.g. FrankenPHP).
+            $this->controller = null;
         }
-
-        return $this->handle($controller->getRequest());
     }
 
     /**
@@ -155,6 +170,7 @@ class ControllerFactory implements ControllerFactoryInterface, RequestHandlerInt
     {
         assert($request instanceof ServerRequest);
         $controller = $this->controller;
+        assert($controller !== null, 'handle() must only be called from within invoke()');
         $controller->setRequest($request);
 
         $result = $controller->startupProcess();
