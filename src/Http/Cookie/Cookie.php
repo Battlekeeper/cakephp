@@ -208,6 +208,44 @@ class Cookie implements CookieInterface
     }
 
     /**
+     * Snapshot of $defaults taken after application bootstrap for FrankenPHP worker mode.
+     *
+     * @var array<string, mixed>|null
+     */
+    private static ?array $_defaultsSnapshot = null;
+
+    /**
+     * Capture the current cookie defaults as the worker-mode baseline.
+     *
+     * Call this after application bootstrap so that any defaults configured
+     * during bootstrap (via setDefaults()) are preserved across requests.
+     * Default changes made during request handling are rolled back by
+     * resetWorkerState().
+     *
+     * @return void
+     */
+    public static function captureWorkerSnapshot(): void
+    {
+        static::$_defaultsSnapshot = static::$defaults;
+    }
+
+    /**
+     * Restore cookie defaults to the post-bootstrap snapshot.
+     *
+     * Called by Server::resetWorkerState() after each request in FrankenPHP
+     * worker mode to prevent per-request default changes from leaking
+     * into subsequent requests.
+     *
+     * @return void
+     */
+    public static function resetWorkerState(): void
+    {
+        if (static::$_defaultsSnapshot !== null) {
+            static::$defaults = static::$_defaultsSnapshot;
+        }
+    }
+
+    /**
      * Factory method to create Cookie instances.
      *
      * @param string $name Cookie name

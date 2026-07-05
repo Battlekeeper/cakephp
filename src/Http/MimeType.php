@@ -387,4 +387,42 @@ class MimeType
 
         return $mimeType === false ? $default : $mimeType;
     }
+
+    /**
+     * Snapshot of $mimeTypes taken after application bootstrap for FrankenPHP worker mode.
+     *
+     * @var array<string, array<string>>|null
+     */
+    private static ?array $_mimeTypesSnapshot = null;
+
+    /**
+     * Capture the current MIME type map as the worker-mode baseline.
+     *
+     * Call this after application bootstrap so that MIME types registered
+     * during bootstrap are preserved across requests. Subsequent calls to
+     * addMimeTypes() or setMimeTypes() during request handling are rolled
+     * back by resetWorkerState().
+     *
+     * @return void
+     */
+    public static function captureWorkerSnapshot(): void
+    {
+        static::$_mimeTypesSnapshot = static::$mimeTypes;
+    }
+
+    /**
+     * Restore the MIME type map to the post-bootstrap snapshot.
+     *
+     * Called by Server::resetWorkerState() after each request in FrankenPHP
+     * worker mode to prevent per-request MIME type additions from leaking
+     * into subsequent requests.
+     *
+     * @return void
+     */
+    public static function resetWorkerState(): void
+    {
+        if (static::$_mimeTypesSnapshot !== null) {
+            static::$mimeTypes = static::$_mimeTypesSnapshot;
+        }
+    }
 }

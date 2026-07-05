@@ -775,6 +775,44 @@ class ServerRequest implements ServerRequestInterface
     }
 
     /**
+     * Snapshot of $_detectors taken after application bootstrap for FrankenPHP worker mode.
+     *
+     * @var array<\Closure|array>|null
+     */
+    private static ?array $_detectorsSnapshot = null;
+
+    /**
+     * Capture the current request detectors as the worker-mode baseline.
+     *
+     * Call this after application bootstrap so that any detectors registered
+     * during bootstrap (via addDetector()) are preserved across requests.
+     * Detectors added during request handling are rolled back by
+     * resetWorkerState().
+     *
+     * @return void
+     */
+    public static function captureWorkerSnapshot(): void
+    {
+        static::$_detectorsSnapshot = static::$_detectors;
+    }
+
+    /**
+     * Restore the request detectors to the post-bootstrap snapshot.
+     *
+     * Called by Server::resetWorkerState() after each request in FrankenPHP
+     * worker mode to prevent per-request detector additions from leaking
+     * into subsequent requests.
+     *
+     * @return void
+     */
+    public static function resetWorkerState(): void
+    {
+        if (static::$_detectorsSnapshot !== null) {
+            static::$_detectors = static::$_detectorsSnapshot;
+        }
+    }
+
+    /**
      * Normalize a header name into the SERVER version.
      *
      * @param string $name The header name.

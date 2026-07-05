@@ -26,6 +26,7 @@ use Cake\Event\EventDispatcherInterface;
 use Cake\Event\EventDispatcherTrait;
 use Cake\Event\EventManager;
 use Cake\Event\EventManagerInterface;
+use Cake\Http\Cookie\Cookie;
 use Cake\I18n\DateTime as I18nDateTime;
 use Cake\I18n\I18n;
 use Cake\I18n\Number;
@@ -197,6 +198,12 @@ class Server implements EventDispatcherInterface
         if (class_exists(Cache::class, false)) {
             $this->_workerI18nSnapshot['cacheEnabled'] = Cache::enabled();
         }
+        // Snapshot Http static state (request detectors, cookie defaults, MIME types)
+        // so that changes made during bootstrap persist across requests while
+        // changes made during request handling are rolled back between requests.
+        ServerRequest::captureWorkerSnapshot();
+        Cookie::captureWorkerSnapshot();
+        MimeType::captureWorkerSnapshot();
     }
 
     /**
@@ -334,6 +341,13 @@ class Server implements EventDispatcherInterface
         if (class_exists(ConnectionManager::class, false)) {
             ConnectionManager::resetWorkerState();
         }
+
+        // Reset Http static state (request detectors, cookie defaults, MIME types)
+        // to the post-bootstrap snapshot so that per-request mutations cannot
+        // bleed into subsequent requests.
+        ServerRequest::resetWorkerState();
+        Cookie::resetWorkerState();
+        MimeType::resetWorkerState();
 
         if ($this->app instanceof ContainerApplicationInterface) {
             $container = $this->app->getContainer();
