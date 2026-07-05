@@ -389,7 +389,7 @@ class MimeType
     }
 
     /**
-     * Snapshot of $mimeTypes taken after application bootstrap for FrankenPHP worker mode.
+     * Snapshot of $mimeTypes taken after application bootstrap for worker mode.
      *
      * @var array<string, array<string>>|null
      */
@@ -413,7 +413,7 @@ class MimeType
     /**
      * Restore the MIME type map to the post-bootstrap snapshot.
      *
-     * Called by Server::resetWorkerState() after each request in FrankenPHP
+     * Called by Server::resetWorkerState() after each request in
      * worker mode to prevent per-request MIME type additions from leaking
      * into subsequent requests.
      *

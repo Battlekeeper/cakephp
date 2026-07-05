@@ -37,7 +37,7 @@ class DateTime extends Chronos implements JsonSerializable, Stringable
 
     /**
      * Snapshot of static format settings captured after application bootstrap,
-     * used by FrankenPHP worker mode to restore the post-bootstrap state between requests.
+     * used by worker mode to restore the post-bootstrap state between requests.
      *
      * @var array<string, mixed>
      */
@@ -646,7 +646,7 @@ class DateTime extends Chronos implements JsonSerializable, Stringable
     }
 
     /**
-     * Capture the current static format settings for FrankenPHP worker mode.
+     * Capture the current static format settings for worker mode.
      *
      * Called once after application bootstrap by Server::bootstrap(). The
      * snapshot is used by resetWorkerState() to restore post-bootstrap values
@@ -671,7 +671,7 @@ class DateTime extends Chronos implements JsonSerializable, Stringable
     /**
      * Restore static format settings to their post-bootstrap values.
      *
-     * Called between requests in FrankenPHP worker mode by Server::resetWorkerState()
+     * Called between requests in worker mode by Server::resetWorkerState()
      * so that changes made to format settings during one request (e.g. via
      * setToStringFormat() or setJsonEncodeFormat()) cannot bleed into the next request.
      *

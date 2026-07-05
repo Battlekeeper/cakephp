@@ -347,7 +347,7 @@ class Router
     /**
      * Clear the current request reference and request-specific context.
      *
-     * Called by Server::resetWorkerState() between requests in a FrankenPHP
+     * Called by Server::resetWorkerState() between requests in a
      * worker process so that terminate-event handlers and any other code
      * running outside of a request context cannot accidentally read stale
      * data from the previous request.

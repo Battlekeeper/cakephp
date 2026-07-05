@@ -360,7 +360,7 @@ class TableLocator extends AbstractLocator implements LocatorInterface
     /**
      * Reset per-request state on all loaded Table instances.
      *
-     * In FrankenPHP worker mode, Table instances are singletons that persist
+     * In worker mode, Table instances are singletons that persist
      * across requests. Calling this method at the end of each request ensures
      * that any per-request state accumulated by tables or their behaviors is
      * rolled back before the next request starts.

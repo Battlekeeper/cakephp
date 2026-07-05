@@ -89,7 +89,7 @@ TEXT;
      * Test that reset() clears the $outputHeader flag so the next dump() call
      * re-emits the CSS and JavaScript header.
      *
-     * In FrankenPHP worker mode the same PHP process handles many HTTP responses.
+     * In worker mode the same PHP process handles many HTTP responses.
      * Without resetting this flag, only the very first response would contain the
      * debug stylesheet and JavaScript — all subsequent responses would lack it,
      * breaking the interactive debug output.

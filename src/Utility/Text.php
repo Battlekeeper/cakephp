@@ -1189,4 +1189,45 @@ class Text
 
         return (string)preg_replace(array_keys($map), $map, $string);
     }
+
+    /**
+     * Worker state snapshot for worker mode.
+     *
+     * Stores the post-bootstrap transliterator settings so they can be
+     * restored between requests.
+     *
+     * @var array<string, mixed>
+     */
+    protected static array $_workerSnapshot = [];
+
+    /**
+     * Capture the current transliterator settings as the post-bootstrap snapshot.
+     *
+     * Called by Server::bootstrap() once after the application has booted so that
+     * resetWorkerState() can restore the correct defaults between requests.
+     *
+     * @return void
+     */
+    public static function captureWorkerSnapshot(): void
+    {
+        static::$_workerSnapshot = [
+            'transliterator' => static::$_defaultTransliterator,
+            'transliteratorId' => static::$_defaultTransliteratorId,
+        ];
+    }
+
+    /**
+     * Reset transliterator settings to their post-bootstrap values.
+     *
+     * Called by Server::resetWorkerState() between requests in worker
+     * mode. If no snapshot has been captured the class defaults are restored.
+     *
+     * @return void
+     */
+    public static function resetWorkerState(): void
+    {
+        static::$_defaultTransliterator = static::$_workerSnapshot['transliterator'] ?? null;
+        static::$_defaultTransliteratorId = static::$_workerSnapshot['transliteratorId']
+            ?? 'Any-Latin; Latin-ASCII; [\u0080-\u7fff] remove';
+    }
 }

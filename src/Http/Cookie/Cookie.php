@@ -208,7 +208,7 @@ class Cookie implements CookieInterface
     }
 
     /**
-     * Snapshot of $defaults taken after application bootstrap for FrankenPHP worker mode.
+     * Snapshot of $defaults taken after application bootstrap for worker mode.
      *
      * @var array<string, mixed>|null
      */
@@ -232,7 +232,7 @@ class Cookie implements CookieInterface
     /**
      * Restore cookie defaults to the post-bootstrap snapshot.
      *
-     * Called by Server::resetWorkerState() after each request in FrankenPHP
+     * Called by Server::resetWorkerState() after each request in
      * worker mode to prevent per-request default changes from leaking
      * into subsequent requests.
      *

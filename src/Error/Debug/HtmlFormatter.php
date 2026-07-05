@@ -34,7 +34,7 @@ class HtmlFormatter implements FormatterInterface
     /**
      * Reset per-request state.
      *
-     * Called by Server::resetWorkerState() between requests in a FrankenPHP
+     * Called by Server::resetWorkerState() between requests in a
      * worker process so that each HTTP response that contains debug output
      * includes the necessary CSS and JavaScript header.
      *

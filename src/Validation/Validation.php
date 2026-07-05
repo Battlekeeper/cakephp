@@ -1973,4 +1973,17 @@ class Validation
     {
         static::$errors = [];
     }
+
+    /**
+     * Reset request-scoped static state for worker mode.
+     *
+     * Clears any debug error messages that were accumulated during the previous
+     * request so they do not bleed into the next request.
+     *
+     * @return void
+     */
+    public static function resetWorkerState(): void
+    {
+        static::$errors = [];
+    }
 }

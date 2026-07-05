@@ -97,6 +97,17 @@ class HtmlHelper extends Helper
     protected array $_scriptBlockOptions = [];
 
     /**
+     * Persistent row counter used by tableCells() when $continueOddEven is true.
+     *
+     * Stored as an instance property rather than a function-level static so that
+     * it is reset automatically when a new request creates a fresh helper instance
+     * in worker mode.
+     *
+     * @var int
+     */
+    protected int $_tableCellCount = 0;
+
+    /**
      * Creates a link to an external resource and handles basic meta tags
      *
      * Create a meta tag that is output inline:
@@ -825,7 +836,7 @@ class HtmlHelper extends Helper
         }
 
         if ($continueOddEven) {
-            static $count = 0;
+            $count = &$this->_tableCellCount;
         } else {
             $count = 0;
         }

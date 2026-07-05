@@ -775,7 +775,7 @@ class ServerRequest implements ServerRequestInterface
     }
 
     /**
-     * Snapshot of $_detectors taken after application bootstrap for FrankenPHP worker mode.
+     * Snapshot of $_detectors taken after application bootstrap for worker mode.
      *
      * @var array<\Closure|array>|null
      */
@@ -799,7 +799,7 @@ class ServerRequest implements ServerRequestInterface
     /**
      * Restore the request detectors to the post-bootstrap snapshot.
      *
-     * Called by Server::resetWorkerState() after each request in FrankenPHP
+     * Called by Server::resetWorkerState() after each request in
      * worker mode to prevent per-request detector additions from leaking
      * into subsequent requests.
      *

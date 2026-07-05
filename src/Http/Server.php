@@ -34,6 +34,8 @@ use Cake\I18n\Number;
 use Cake\I18n\Time as I18nTime;
 use Cake\ORM\TableRegistry;
 use Cake\Routing\Router;
+use Cake\Utility\Text;
+use Cake\Validation\Validation;
 use InvalidArgumentException;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -58,7 +60,7 @@ class Server implements EventDispatcherInterface
     /**
      * Whether the application has already been bootstrapped.
      *
-     * Used by FrankenPHP worker mode to ensure bootstrap only runs once
+     * Used by worker mode to ensure bootstrap only runs once
      * per worker process regardless of how many requests are handled.
      *
      * @var bool
@@ -76,7 +78,7 @@ class Server implements EventDispatcherInterface
      * Snapshot of request-scoped I18n defaults captured after application bootstrap.
      *
      * Keyed by the static property name; used by resetWorkerState() to restore
-     * the post-bootstrap values between requests in FrankenPHP worker mode.
+     * the post-bootstrap values between requests in worker mode.
      * Stored as instance state so that each Server instance (and each test)
      * has its own independent snapshot.
      *
@@ -169,7 +171,7 @@ class Server implements EventDispatcherInterface
      * Calls the application's `bootstrap()` hook. After the application the
      * plugins are bootstrapped.
      *
-     * This method is idempotent: when running in FrankenPHP worker mode the
+     * This method is idempotent: when running in worker mode the
      * same `Server` instance handles many requests, so bootstrap must only
      * execute once. Subsequent calls are silently skipped.
      *
@@ -188,7 +190,7 @@ class Server implements EventDispatcherInterface
         }
         // Snapshot request-scoped I18n defaults after bootstrap so that
         // resetWorkerState() can restore the post-bootstrap values between
-        // requests in FrankenPHP worker mode. Raw getters are used to avoid
+        // requests in worker mode. Raw getters are used to avoid
         // triggering lazy-initialisation side-effects.
         if (class_exists(I18nDateTime::class, false)) {
             $this->_workerI18nSnapshot['dateTimeDefaultLocale'] = I18nDateTime::getDefaultLocale();
@@ -219,6 +221,12 @@ class Server implements EventDispatcherInterface
         ServerRequest::captureWorkerSnapshot();
         Cookie::captureWorkerSnapshot();
         MimeType::captureWorkerSnapshot();
+        // Snapshot Text transliterator settings set during bootstrap so that
+        // per-request changes (e.g. locale-specific transliterators) can be
+        // rolled back between requests in worker mode.
+        if (class_exists(Text::class, false)) {
+            Text::captureWorkerSnapshot();
+        }
     }
 
     /**
@@ -258,7 +266,7 @@ class Server implements EventDispatcherInterface
     /**
      * Reset request-scoped framework state after a worker request completes.
      *
-     * In long-running environments such as FrankenPHP worker mode the same PHP
+     * In long-running environments such as worker mode the same PHP
      * process handles many requests. State mutated during one request must be
      * restored before the next request begins to prevent cross-request leaks.
      *
@@ -378,6 +386,14 @@ class Server implements EventDispatcherInterface
         ServerRequest::resetWorkerState();
         Cookie::resetWorkerState();
         MimeType::resetWorkerState();
+        // Clear validation debug errors accumulated during the previous request.
+        if (class_exists(Validation::class, false)) {
+            Validation::resetWorkerState();
+        }
+        // Restore Text transliterator settings to their post-bootstrap values.
+        if (class_exists(Text::class, false)) {
+            Text::resetWorkerState();
+        }
 
         if ($this->app instanceof ContainerApplicationInterface) {
             $container = $this->app->getContainer();

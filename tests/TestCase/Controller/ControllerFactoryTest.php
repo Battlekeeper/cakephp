@@ -973,7 +973,7 @@ class ControllerFactoryTest extends TestCase
     /**
      * Verify that the internal controller reference is released after invoke()
      * and that the full controller object graph is eligible for garbage collection
-     * once the next request begins (simulating FrankenPHP worker mode).
+     * once the next request begins (simulating worker mode).
      *
      * Two guarantees are checked:
      *  1. ControllerFactory does not hold its own strong reference after invoke().

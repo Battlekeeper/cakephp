@@ -312,7 +312,7 @@ class Number
      *
      * Returns null if no currency has been explicitly set via setDefaultCurrency().
      * This method is intended for use by Server::bootstrap() when snapshotting
-     * post-bootstrap state for FrankenPHP worker mode.
+     * post-bootstrap state for worker mode.
      *
      * @return string|null The explicitly configured currency code, or null.
      */
@@ -327,7 +327,7 @@ class Number
      *
      * Returns null if no format has been explicitly set via setDefaultCurrencyFormat().
      * This method is intended for use by Server::bootstrap() when snapshotting
-     * post-bootstrap state for FrankenPHP worker mode.
+     * post-bootstrap state for worker mode.
      *
      * @return string|null The explicitly configured currency format, or null.
      */
