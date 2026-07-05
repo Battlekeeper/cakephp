@@ -68,6 +68,8 @@ require dirname(__DIR__) . '/vendor/autoload.php';
 $server = new Server(new Application(dirname(__DIR__) . '/config'));
 
 if (function_exists('frankenphp_handle_request')) {
+    $server->setWorkerMode();
+
     // ---------------------------------------------------------------------------
     // FrankenPHP worker mode
     //
@@ -112,7 +114,7 @@ if (function_exists('frankenphp_handle_request')) {
     };
 
     for ($nbRequests = 0; !$maxRequests || $nbRequests < $maxRequests; ++$nbRequests) {
-        $keepRunning = \frankenphp_handle_request($handler);
+        $keepRunning = frankenphp_handle_request($handler);
 
         // Proactively collect reference cycles after each request to reduce the
         // chance of the garbage collector running mid-request on the next iteration.

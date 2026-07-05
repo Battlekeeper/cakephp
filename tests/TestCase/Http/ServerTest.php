@@ -176,6 +176,67 @@ class ServerTest extends TestCase
         );
     }
 
+    public function testRunBootstrapsEveryRequestByDefault(): void
+    {
+        $app = new class implements HttpApplicationInterface {
+            public int $bootstraps = 0;
+
+            public function bootstrap(): void
+            {
+                $this->bootstraps++;
+            }
+
+            public function middleware(MiddlewareQueue $middlewareQueue): MiddlewareQueue
+            {
+                return $middlewareQueue;
+            }
+
+            public function handle(ServerRequestInterface $request): Response
+            {
+                return new Response();
+            }
+        };
+        $server = new Server($app);
+
+        $server->run(new ServerRequest());
+        $server->run(new ServerRequest());
+
+        $this->assertSame(2, $app->bootstraps);
+    }
+
+    public function testRunBootstrapsOnceInWorkerMode(): void
+    {
+        $app = new class implements HttpApplicationInterface {
+            public int $bootstraps = 0;
+
+            public function bootstrap(): void
+            {
+                $this->bootstraps++;
+            }
+
+            public function middleware(MiddlewareQueue $middlewareQueue): MiddlewareQueue
+            {
+                return $middlewareQueue;
+            }
+
+            public function handle(ServerRequestInterface $request): Response
+            {
+                return new Response();
+            }
+        };
+        $server = new Server($app);
+        $server->setWorkerMode();
+
+        try {
+            $server->run(new ServerRequest());
+            $server->run(new ServerRequest());
+
+            $this->assertSame(1, $app->bootstraps);
+        } finally {
+            Router::setRouteCaching(false);
+        }
+    }
+
     /**
      * Test middleware being invoked.
      */

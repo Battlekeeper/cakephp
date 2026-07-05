@@ -24,6 +24,7 @@ use Cake\Core\Configure;
 use Cake\Core\Container;
 use Cake\Core\ContainerInterface;
 use Cake\Event\EventInterface;
+use Cake\Event\EventManager;
 use Cake\Event\EventManagerInterface;
 use Cake\Http\BaseApplication;
 use Cake\Http\MiddlewareQueue;
@@ -101,6 +102,79 @@ class BaseApplicationTest extends TestCase
         $container = $app->getContainer();
         $this->assertSame($request, $container->get(ServerRequest::class));
         $this->assertSame($container, $container->get(ContainerInterface::class));
+    }
+
+    public function testEventsAreRegisteredEveryHandleByDefault(): void
+    {
+        $app = new class (dirname(__DIR__, 2), new EventManager()) extends BaseApplication
+        {
+            public int $events = 0;
+
+            public function middleware(MiddlewareQueue $middlewareQueue): MiddlewareQueue
+            {
+                return $middlewareQueue;
+            }
+
+            public function events(EventManagerInterface $eventManager): EventManagerInterface
+            {
+                $this->events++;
+                $eventManager->on('testDefaultEventRegistration', function (): void {
+                });
+
+                return $eventManager;
+            }
+        };
+        $request = ServerRequestFactory::fromGlobals(['REQUEST_URI' => '/cakes']);
+        $request = $request->withAttribute('params', [
+            'controller' => 'Cakes',
+            'action' => 'index',
+            'plugin' => null,
+            'pass' => [],
+        ]);
+
+        $app->handle($request);
+        $app->handle($request);
+
+        $listeners = $app->getEventManager()->prioritisedListeners('testDefaultEventRegistration');
+        $this->assertSame(2, $app->events);
+        $this->assertCount(2, $listeners[EventManager::$defaultPriority]);
+    }
+
+    public function testEventsAreRegisteredOnceInWorkerMode(): void
+    {
+        $app = new class (dirname(__DIR__, 2), new EventManager()) extends BaseApplication
+        {
+            public int $events = 0;
+
+            public function middleware(MiddlewareQueue $middlewareQueue): MiddlewareQueue
+            {
+                return $middlewareQueue;
+            }
+
+            public function events(EventManagerInterface $eventManager): EventManagerInterface
+            {
+                $this->events++;
+                $eventManager->on('testWorkerEventRegistration', function (): void {
+                });
+
+                return $eventManager;
+            }
+        };
+        $app->setWorkerMode();
+        $request = ServerRequestFactory::fromGlobals(['REQUEST_URI' => '/cakes']);
+        $request = $request->withAttribute('params', [
+            'controller' => 'Cakes',
+            'action' => 'index',
+            'plugin' => null,
+            'pass' => [],
+        ]);
+
+        $app->handle($request);
+        $app->handle($request);
+
+        $listeners = $app->getEventManager()->prioritisedListeners('testWorkerEventRegistration');
+        $this->assertSame(1, $app->events);
+        $this->assertCount(1, $listeners[EventManager::$defaultPriority]);
     }
 
     /**

@@ -170,6 +170,13 @@ class Router
     protected static bool $_routesLoaded = false;
 
     /**
+     * Whether route loading should be cached after the first request.
+     *
+     * @var bool
+     */
+    protected static bool $_routeCaching = false;
+
+    /**
      * Get or set default route class.
      *
      * @param string|null $routeClass Class name.
@@ -288,6 +295,29 @@ class Router
         static::$_collection = new RouteCollection();
         static::$_urlFilters = [];
         static::$_routesLoaded = false;
+    }
+
+    /**
+     * Enable or disable route loading cache.
+     *
+     * @internal
+     * @param bool $enabled Whether route loading should be cached.
+     * @return void
+     */
+    public static function setRouteCaching(bool $enabled): void
+    {
+        static::$_routeCaching = $enabled;
+    }
+
+    /**
+     * Check whether route loading cache is enabled.
+     *
+     * @internal
+     * @return bool
+     */
+    public static function routeCachingEnabled(): bool
+    {
+        return static::$_routeCaching;
     }
 
     /**

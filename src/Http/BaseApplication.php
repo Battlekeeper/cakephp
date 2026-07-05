@@ -97,6 +97,20 @@ abstract class BaseApplication implements
     protected ?ContainerInterface $container = null;
 
     /**
+     * Whether this application is running in a long-lived worker process.
+     *
+     * @var bool
+     */
+    protected bool $workerMode = false;
+
+    /**
+     * Whether application and plugin events have been registered in worker mode.
+     *
+     * @var bool
+     */
+    protected bool $eventsRegistered = false;
+
+    /**
      * Constructor
      *
      * @param string $configDir The directory the bootstrap configuration is held in.
@@ -120,6 +134,22 @@ abstract class BaseApplication implements
      * @return \Cake\Http\MiddlewareQueue
      */
     abstract public function middleware(MiddlewareQueue $middlewareQueue): MiddlewareQueue;
+
+    /**
+     * Enable or disable long-lived worker mode.
+     *
+     * @param bool $workerMode Whether worker mode should be enabled.
+     * @return $this
+     */
+    public function setWorkerMode(bool $workerMode = true)
+    {
+        $this->workerMode = $workerMode;
+        if (!$workerMode) {
+            $this->eventsRegistered = false;
+        }
+
+        return $this;
+    }
 
     /**
      * @inheritDoc
@@ -349,8 +379,11 @@ abstract class BaseApplication implements
             $container->add(ContainerInterface::class, $container);
         }
 
-        $eventManager = $this->events($this->getEventManager());
-        $this->setEventManager($this->pluginEvents($eventManager));
+        if (!$this->workerMode || !$this->eventsRegistered) {
+            $eventManager = $this->events($this->getEventManager());
+            $this->setEventManager($this->pluginEvents($eventManager));
+            $this->eventsRegistered = true;
+        }
 
         $this->controllerFactory ??= new ControllerFactory($container);
 

@@ -61,6 +61,13 @@ class Server implements EventDispatcherInterface
     protected bool $bootstrapped = false;
 
     /**
+     * Whether this server is running in a long-lived worker process.
+     *
+     * @var bool
+     */
+    protected bool $workerMode = false;
+
+    /**
      * Snapshot of request-scoped I18n defaults captured after application bootstrap.
      *
      * Keyed by the static property name; used by resetWorkerState() to restore
@@ -81,6 +88,26 @@ class Server implements EventDispatcherInterface
     public function __construct(HttpApplicationInterface $app, protected Runner $runner = new Runner())
     {
         $this->app = $app;
+    }
+
+    /**
+     * Enable or disable long-lived worker mode.
+     *
+     * In worker mode application bootstrap and route registration are performed
+     * once per Server instance. Request-scoped framework state can then be reset
+     * between requests with resetWorkerState().
+     *
+     * @param bool $workerMode Whether worker mode should be enabled.
+     * @return $this
+     */
+    public function setWorkerMode(bool $workerMode = true)
+    {
+        $this->workerMode = $workerMode;
+        if (method_exists($this->app, 'setWorkerMode')) {
+            $this->app->setWorkerMode($workerMode);
+        }
+
+        return $this;
     }
 
     /**
@@ -145,10 +172,11 @@ class Server implements EventDispatcherInterface
      */
     protected function bootstrap(): void
     {
-        if ($this->bootstrapped) {
+        if ($this->workerMode && $this->bootstrapped) {
             return;
         }
         $this->bootstrapped = true;
+        Router::setRouteCaching($this->workerMode);
         $this->app->bootstrap();
         if ($this->app instanceof PluginApplicationInterface) {
             $this->app->pluginBootstrap();

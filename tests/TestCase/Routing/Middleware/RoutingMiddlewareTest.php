@@ -188,6 +188,53 @@ class RoutingMiddlewareTest extends TestCase
         $middleware->process($request, $handler);
     }
 
+    public function testRoutesHookInvokedEveryRequestByDefault(): void
+    {
+        Router::reload();
+        $app = new class implements RoutingApplicationInterface {
+            public int $routes = 0;
+
+            public function routes(RouteBuilder $routes): void
+            {
+                $this->routes++;
+                $routes->connect('/worker-route', ['controller' => 'Articles', 'action' => 'index']);
+            }
+        };
+        $middleware = new RoutingMiddleware($app);
+        $handler = new TestRequestHandler(fn() => new Response());
+
+        $middleware->process(ServerRequestFactory::fromGlobals(['REQUEST_URI' => '/worker-route']), $handler);
+        $middleware->process(ServerRequestFactory::fromGlobals(['REQUEST_URI' => '/worker-route']), $handler);
+
+        $this->assertSame(2, $app->routes);
+    }
+
+    public function testRoutesHookInvokedOnceWhenRouteCachingEnabled(): void
+    {
+        Router::reload();
+        Router::setRouteCaching(true);
+        $app = new class implements RoutingApplicationInterface {
+            public int $routes = 0;
+
+            public function routes(RouteBuilder $routes): void
+            {
+                $this->routes++;
+                $routes->connect('/worker-route', ['controller' => 'Articles', 'action' => 'index']);
+            }
+        };
+        $middleware = new RoutingMiddleware($app);
+        $handler = new TestRequestHandler(fn() => new Response());
+
+        try {
+            $middleware->process(ServerRequestFactory::fromGlobals(['REQUEST_URI' => '/worker-route']), $handler);
+            $middleware->process(ServerRequestFactory::fromGlobals(['REQUEST_URI' => '/worker-route']), $handler);
+
+            $this->assertSame(1, $app->routes);
+        } finally {
+            Router::setRouteCaching(false);
+        }
+    }
+
     /**
      * Test that pluginRoutes hook is called
      */
