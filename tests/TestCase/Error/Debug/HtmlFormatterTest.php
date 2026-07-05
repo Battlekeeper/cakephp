@@ -84,4 +84,34 @@ object(MyObject) id:1 {
 TEXT;
         $this->assertStringContainsString($expected, strip_tags($result));
     }
+
+    /**
+     * Test that reset() clears the $outputHeader flag so the next dump() call
+     * re-emits the CSS and JavaScript header.
+     *
+     * In FrankenPHP worker mode the same PHP process handles many HTTP responses.
+     * Without resetting this flag, only the very first response would contain the
+     * debug stylesheet and JavaScript — all subsequent responses would lack it,
+     * breaking the interactive debug output.
+     */
+    public function testReset(): void
+    {
+        // Start from a known clean state regardless of other test ordering.
+        HtmlFormatter::reset();
+        $formatter = new HtmlFormatter();
+
+        // First dump() call should include the CSS/JS header.
+        $firstDump = $formatter->dump(new ScalarNode('string', 'first'));
+        $this->assertStringContainsString('<style>', $firstDump, 'First dump should include CSS header');
+
+        // Second dump() in the same process/request should NOT repeat the header.
+        $secondDump = $formatter->dump(new ScalarNode('string', 'second'));
+        $this->assertStringNotContainsString('<style>', $secondDump, 'Second dump should not repeat CSS header');
+
+        // After reset() (simulating a new request in worker mode) the header must
+        // be emitted again so the next HTTP response is self-contained.
+        HtmlFormatter::reset();
+        $afterReset = $formatter->dump(new ScalarNode('string', 'after-reset'));
+        $this->assertStringContainsString('<style>', $afterReset, 'Dump after reset() should include CSS header again');
+    }
 }

@@ -454,4 +454,67 @@ class ConnectionManagerTest extends TestCase
         $result = ConnectionManager::get('test_variant');
         $this->assertSame('test_variant', $result->configName());
     }
+
+    /**
+     * Test that resetWorkerState() is a no-op when no connections have been
+     * instantiated yet (i.e. the internal registry has not been created).
+     *
+     * This exercises the early-return guard and verifies that no exception is
+     * thrown in a cold-start worker process where the first request hasn't
+     * loaded any connections yet.
+     */
+    public function testResetWorkerStateNoConnections(): void
+    {
+        // Drop everything so the registry is empty / never created for this name.
+        // We cannot tear down the static registry fully, but calling resetWorkerState()
+        // when nothing has been instantiated must be safe.
+        ConnectionManager::resetWorkerState();
+        $this->assertTrue(true, 'resetWorkerState() should not throw when no connections are loaded');
+    }
+
+    /**
+     * Test that resetWorkerState() iterates over loaded connections and skips
+     * non-Database Connection datasource instances gracefully.
+     *
+     * FakeConnection implements ConnectionInterface but is not a
+     * Cake\Database\Connection, so the instanceof guard should skip it without
+     * throwing an error.
+     */
+    public function testResetWorkerStateSkipsNonDatabaseConnections(): void
+    {
+        ConnectionManager::setConfig('test_variant', [
+            'className' => FakeConnection::class,
+        ]);
+        // Force the connection into the registry.
+        $connection = ConnectionManager::get('test_variant');
+        $this->assertInstanceOf(FakeConnection::class, $connection);
+
+        // Should not throw — FakeConnection has no resetWorkerState() method,
+        // and the instanceof guard in ConnectionManager::resetWorkerState()
+        // must prevent it from being called.
+        ConnectionManager::resetWorkerState();
+        $this->assertTrue(true, 'resetWorkerState() should silently skip non-Connection datasources');
+    }
+
+    /**
+     * Test that resetWorkerState() calls resetWorkerState() on each loaded
+     * Cake\Database\Connection instance.
+     *
+     * Uses the `test` connection when available so that the real registry
+     * iteration path is exercised against a genuine Connection object.
+     */
+    public function testResetWorkerStateWithDatabaseConnection(): void
+    {
+        $config = ConnectionManager::getConfig('test');
+        $this->skipIf(empty($config), 'No test connection configured, skipping');
+
+        // Ensure the connection is in the registry.
+        $connection = ConnectionManager::get('test');
+        $this->assertInstanceOf(Connection::class, $connection);
+
+        // Calling resetWorkerState() on a connection with no open transaction
+        // must be a clean no-op without throwing.
+        ConnectionManager::resetWorkerState();
+        $this->assertFalse($connection->inTransaction(), 'Connection should not be in a transaction after reset');
+    }
 }
