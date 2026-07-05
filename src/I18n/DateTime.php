@@ -36,6 +36,14 @@ class DateTime extends Chronos implements JsonSerializable, Stringable
     use DateFormatTrait;
 
     /**
+     * Snapshot of static format settings captured after application bootstrap,
+     * used by FrankenPHP worker mode to restore the post-bootstrap state between requests.
+     *
+     * @var array<string, mixed>
+     */
+    protected static array $_workerSnapshot = [];
+
+    /**
      * The default locale to be used for displaying formatted date strings.
      *
      * Use static::setDefaultLocale() and static::getDefaultLocale() instead.
@@ -635,6 +643,55 @@ class DateTime extends Chronos implements JsonSerializable, Stringable
             3 => [$year . '-07-01', $year . '-09-30'],
             default => [$year . '-10-01', $year . '-12-31'],
         };
+    }
+
+    /**
+     * Capture the current static format settings for FrankenPHP worker mode.
+     *
+     * Called once after application bootstrap by Server::bootstrap(). The
+     * snapshot is used by resetWorkerState() to restore post-bootstrap values
+     * between requests so that per-request mutations cannot leak into the next
+     * request.
+     *
+     * @return void
+     */
+    public static function captureWorkerSnapshot(): void
+    {
+        static::$_workerSnapshot = [
+            '_toStringFormat' => static::$_toStringFormat,
+            '_jsonEncodeFormat' => static::$_jsonEncodeFormat,
+            'niceFormat' => static::$niceFormat,
+            'wordFormat' => static::$wordFormat,
+            'wordAccuracy' => static::$wordAccuracy,
+            'wordEnd' => static::$wordEnd,
+            'lenientParsing' => static::$lenientParsing,
+        ];
+    }
+
+    /**
+     * Restore static format settings to their post-bootstrap values.
+     *
+     * Called between requests in FrankenPHP worker mode by Server::resetWorkerState()
+     * so that changes made to format settings during one request (e.g. via
+     * setToStringFormat() or setJsonEncodeFormat()) cannot bleed into the next request.
+     *
+     * Has no effect if captureWorkerSnapshot() has not been called yet.
+     *
+     * @return void
+     */
+    public static function resetWorkerState(): void
+    {
+        if (static::$_workerSnapshot === []) {
+            return;
+        }
+
+        static::$_toStringFormat = static::$_workerSnapshot['_toStringFormat'];
+        static::$_jsonEncodeFormat = static::$_workerSnapshot['_jsonEncodeFormat'];
+        static::$niceFormat = static::$_workerSnapshot['niceFormat'];
+        static::$wordFormat = static::$_workerSnapshot['wordFormat'];
+        static::$wordAccuracy = static::$_workerSnapshot['wordAccuracy'];
+        static::$wordEnd = static::$_workerSnapshot['wordEnd'];
+        static::$lenientParsing = static::$_workerSnapshot['lenientParsing'];
     }
 
     /**

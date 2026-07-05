@@ -27,9 +27,11 @@ use Cake\Event\EventDispatcherTrait;
 use Cake\Event\EventManager;
 use Cake\Event\EventManagerInterface;
 use Cake\Http\Cookie\Cookie;
+use Cake\I18n\Date as I18nDate;
 use Cake\I18n\DateTime as I18nDateTime;
 use Cake\I18n\I18n;
 use Cake\I18n\Number;
+use Cake\I18n\Time as I18nTime;
 use Cake\Routing\Router;
 use InvalidArgumentException;
 use Psr\Http\Message\ResponseInterface;
@@ -198,6 +200,18 @@ class Server implements EventDispatcherInterface
         if (class_exists(Cache::class, false)) {
             $this->_workerI18nSnapshot['cacheEnabled'] = Cache::enabled();
         }
+        // Snapshot DateTime/Date/Time format settings so that per-request changes
+        // (e.g. setToStringFormat(), setJsonEncodeFormat(), niceFormat mutations)
+        // can be rolled back between requests in worker mode.
+        if (class_exists(I18nDateTime::class, false)) {
+            I18nDateTime::captureWorkerSnapshot();
+        }
+        if (class_exists(I18nDate::class, false)) {
+            I18nDate::captureWorkerSnapshot();
+        }
+        if (class_exists(I18nTime::class, false)) {
+            I18nTime::captureWorkerSnapshot();
+        }
         // Snapshot Http static state (request detectors, cookie defaults, MIME types)
         // so that changes made during bootstrap persist across requests while
         // changes made during request handling are rolled back between requests.
@@ -312,6 +326,13 @@ class Server implements EventDispatcherInterface
         // these classes were loaded after bootstrap.
         if (class_exists(I18nDateTime::class, false)) {
             I18nDateTime::setDefaultLocale($this->_workerI18nSnapshot['dateTimeDefaultLocale'] ?? null);
+            I18nDateTime::resetWorkerState();
+        }
+        if (class_exists(I18nDate::class, false)) {
+            I18nDate::resetWorkerState();
+        }
+        if (class_exists(I18nTime::class, false)) {
+            I18nTime::resetWorkerState();
         }
         if (class_exists(Number::class, false)) {
             Number::setDefaultCurrency($this->_workerI18nSnapshot['numberDefaultCurrency'] ?? null);
