@@ -3302,6 +3302,32 @@ class Table implements RepositoryInterface, EventListenerInterface, EventDispatc
     }
 
     /**
+     * Reset per-request state for worker mode.
+     *
+     * In long-lived worker processes, Table instances are singletons that
+     * persist across requests. Any state mutated by a behavior during request
+     * handling must be rolled back between requests.
+     *
+     * This method calls `resetWorkerState()` on every loaded behavior that
+     * implements it, allowing behaviors to clean up their own per-request
+     * state (e.g., an explicit locale override set via `setLocale()`).
+     *
+     * Called automatically by `TableLocator::resetWorkerState()` at the end
+     * of each request in worker mode.
+     *
+     * @return void
+     */
+    public function resetWorkerState(): void
+    {
+        foreach ($this->_behaviors->loaded() as $name) {
+            $behavior = $this->_behaviors->get($name);
+            if (method_exists($behavior, 'resetWorkerState')) {
+                $behavior->resetWorkerState();
+            }
+        }
+    }
+
+    /**
      * Returns an array that can be used to describe the internal state of this
      * object.
      *

@@ -32,6 +32,7 @@ use Cake\I18n\DateTime as I18nDateTime;
 use Cake\I18n\I18n;
 use Cake\I18n\Number;
 use Cake\I18n\Time as I18nTime;
+use Cake\ORM\TableRegistry;
 use Cake\Routing\Router;
 use InvalidArgumentException;
 use Psr\Http\Message\ResponseInterface;
@@ -361,6 +362,14 @@ class Server implements EventDispatcherInterface
         // request and reset connection state so each request starts clean.
         if (class_exists(ConnectionManager::class, false)) {
             ConnectionManager::resetWorkerState();
+        }
+
+        // Reset per-request ORM state: iterate all loaded Table instances and
+        // invoke resetWorkerState() on each so that behaviors (e.g. a locale
+        // override set via TranslateBehavior::setLocale()) are rolled back
+        // before the next request starts.
+        if (class_exists(TableRegistry::class, false)) {
+            TableRegistry::getTableLocator()->resetWorkerState();
         }
 
         // Reset Http static state (request detectors, cookie defaults, MIME types)

@@ -288,6 +288,24 @@ class TranslateBehavior extends Behavior implements PropertyMarshalInterface
     }
 
     /**
+     * Reset per-request state for worker mode.
+     *
+     * Clears any locale override that was set via `setLocale()` during the
+     * previous request so that the next request begins with no explicit locale
+     * override (falling back to the global I18n locale as usual).
+     *
+     * Called automatically by `Table::resetWorkerState()` which is in turn
+     * called by `TableLocator::resetWorkerState()` at the end of each request
+     * in worker mode.
+     *
+     * @return void
+     */
+    public function resetWorkerState(): void
+    {
+        $this->strategy?->setLocale(null);
+    }
+
+    /**
      * Returns the current locale.
      *
      * If no locale has been explicitly set via `setLocale()`, this method will return

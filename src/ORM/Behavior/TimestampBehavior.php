@@ -162,6 +162,26 @@ class TimestampBehavior extends Behavior
     }
 
     /**
+     * Reset per-request state for worker mode.
+     *
+     * Clears the cached timestamp so that the next request always begins with
+     * a fresh timestamp rather than one pinned by a previous call to
+     * `timestamp(\$ts)`. Without this reset, any fixed timestamp set during
+     * one request (typically in test helpers) would persist to subsequent
+     * requests in a long-lived worker process.
+     *
+     * Called automatically by `Table::resetWorkerState()` which is in turn
+     * called by `TableLocator::resetWorkerState()` at the end of each request
+     * in worker mode.
+     *
+     * @return void
+     */
+    public function resetWorkerState(): void
+    {
+        $this->_ts = null;
+    }
+
+    /**
      * Touch an entity
      *
      * Bumps timestamp fields for an entity. For any fields configured to be updated
