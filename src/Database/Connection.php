@@ -795,6 +795,46 @@ class Connection implements ConnectionInterface
     }
 
     /**
+     * Reset per-request connection state for long-lived worker processes (e.g. FrankenPHP).
+     *
+     * Rolls back any uncommitted transaction left open at the end of a request
+     * and resets the transaction counters so the connection is clean for the
+     * next request. Called automatically by ConnectionManager::resetWorkerState().
+     *
+     * @return void
+     */
+    public function resetWorkerState(): void
+    {
+        if (!$this->_transactionStarted) {
+            return;
+        }
+
+        if (class_exists(Log::class)) {
+            $message = 'Connection `' . $this->configName() . '` had an open transaction at end of '
+                . 'request; rolling back to prevent state leak into the next request.';
+
+            $requestUrl = env('REQUEST_URI');
+            if ($requestUrl) {
+                $message .= "\nRequest URL: " . $requestUrl;
+            }
+
+            Log::warning($message);
+        }
+
+        $this->_transactionLevel = 0;
+        $this->_transactionStarted = false;
+        $this->nestedTransactionRollbackException = null;
+
+        try {
+            $this->getWriteDriver()->rollbackTransaction();
+        } catch (Throwable) {
+            // Swallow rollback errors — the connection may have already been
+            // dropped or invalidated. The state has been reset above so the
+            // next request will start clean.
+        }
+    }
+
+    /**
      * Returns an array that can be used to describe the internal state of this
      * object.
      *

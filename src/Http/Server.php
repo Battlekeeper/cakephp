@@ -20,6 +20,7 @@ use Cake\Cache\Cache;
 use Cake\Core\ContainerApplicationInterface;
 use Cake\Core\HttpApplicationInterface;
 use Cake\Core\PluginApplicationInterface;
+use Cake\Datasource\ConnectionManager;
 use Cake\Error\Debug\HtmlFormatter;
 use Cake\Event\EventDispatcherInterface;
 use Cake\Event\EventDispatcherTrait;
@@ -326,6 +327,12 @@ class Server implements EventDispatcherInterface
         // contains debug output emits the required CSS and JavaScript.
         if (class_exists(HtmlFormatter::class, false)) {
             HtmlFormatter::reset();
+        }
+
+        // Roll back any open database transactions left over from the previous
+        // request and reset connection state so each request starts clean.
+        if (class_exists(ConnectionManager::class, false)) {
+            ConnectionManager::resetWorkerState();
         }
 
         if ($this->app instanceof ContainerApplicationInterface) {

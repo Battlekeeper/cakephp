@@ -210,4 +210,29 @@ class ConnectionManager
 
         return static::$_registry->{$name} ?? static::$_registry->load($name, static::$_config[$name]);
     }
+
+    /**
+     * Reset per-request state on all loaded database connections.
+     *
+     * Intended for use with long-lived worker processes (e.g. FrankenPHP).
+     * Iterates over every connection that has already been instantiated and
+     * calls resetWorkerState() on it, which rolls back any open transaction
+     * and resets transaction counters so the next request starts clean.
+     *
+     * Connections that have not been used yet are not instantiated.
+     *
+     * @return void
+     */
+    public static function resetWorkerState(): void
+    {
+        if (!isset(static::$_registry)) {
+            return;
+        }
+
+        foreach (static::$_registry as $connection) {
+            if ($connection instanceof Connection) {
+                $connection->resetWorkerState();
+            }
+        }
+    }
 }
