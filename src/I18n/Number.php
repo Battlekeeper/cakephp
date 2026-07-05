@@ -307,6 +307,36 @@ class Number
     }
 
     /**
+     * Returns the raw value of the default currency without triggering lazy
+     * initialisation from the locale's NumberFormatter.
+     *
+     * Returns null if no currency has been explicitly set via setDefaultCurrency().
+     * This method is intended for use by Server::bootstrap() when snapshotting
+     * post-bootstrap state for FrankenPHP worker mode.
+     *
+     * @return string|null The explicitly configured currency code, or null.
+     */
+    public static function getRawDefaultCurrency(): ?string
+    {
+        return static::$_defaultCurrency;
+    }
+
+    /**
+     * Returns the raw value of the default currency format without triggering
+     * the lazy initialisation side-effect in getDefaultCurrencyFormat().
+     *
+     * Returns null if no format has been explicitly set via setDefaultCurrencyFormat().
+     * This method is intended for use by Server::bootstrap() when snapshotting
+     * post-bootstrap state for FrankenPHP worker mode.
+     *
+     * @return string|null The explicitly configured currency format, or null.
+     */
+    public static function getRawDefaultCurrencyFormat(): ?string
+    {
+        return static::$_defaultCurrencyFormat;
+    }
+
+    /**
      * Returns a formatter object that can be reused for similar formatting task
      * under the same locale and options. This is often a speedier alternative to
      * using other methods in this class as only one formatter object needs to be

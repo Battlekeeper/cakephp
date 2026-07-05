@@ -27,7 +27,9 @@ use Cake\Http\ResponseEmitter;
 use Cake\Http\Server;
 use Cake\Http\ServerRequest;
 use Cake\Http\Session;
+use Cake\I18n\DateTime as I18nDateTime;
 use Cake\I18n\I18n;
+use Cake\I18n\Number;
 use Cake\Routing\Router;
 use Cake\TestSuite\TestCase;
 use InvalidArgumentException;
@@ -462,6 +464,127 @@ class ServerTest extends TestCase
         } finally {
             I18n::setLocale($originalLocale);
             Router::reload();
+        }
+    }
+
+    /**
+     * Test that resetWorkerState() restores DateTime::$defaultLocale to its
+     * post-bootstrap value when it is changed during a request.
+     */
+    public function testResetWorkerStateResetsDateTimeDefaultLocale(): void
+    {
+        $originalLocale = I18nDateTime::getDefaultLocale();
+
+        try {
+            $app = new MiddlewareApplication($this->config);
+            $server = new Server($app);
+            // Simulate bootstrap (captures initial state: null)
+            $server->run(new ServerRequest());
+
+            // Simulate request changing the locale
+            I18nDateTime::setDefaultLocale('fr_FR');
+            $this->assertSame('fr_FR', I18nDateTime::getDefaultLocale());
+
+            $server->resetWorkerState();
+
+            // Should be restored to the post-bootstrap value (null)
+            $this->assertSame($originalLocale, I18nDateTime::getDefaultLocale());
+        } finally {
+            I18nDateTime::setDefaultLocale($originalLocale);
+        }
+    }
+
+    /**
+     * Test that resetWorkerState() restores DateTime::$defaultLocale to a
+     * value explicitly set during bootstrap (not just null).
+     */
+    public function testResetWorkerStatePreservesBootstrapDateTimeLocale(): void
+    {
+        $originalLocale = I18nDateTime::getDefaultLocale();
+
+        try {
+            // Simulate an app that sets DateTime locale in bootstrap
+            I18nDateTime::setDefaultLocale('de_DE');
+
+            $app = new MiddlewareApplication($this->config);
+            $server = new Server($app);
+            // Run once to trigger bootstrap and capture 'de_DE' as the default
+            $server->run(new ServerRequest());
+
+            // Simulate request changing the locale to something else
+            I18nDateTime::setDefaultLocale('ja_JP');
+            $this->assertSame('ja_JP', I18nDateTime::getDefaultLocale());
+
+            $server->resetWorkerState();
+
+            // Should be restored to the bootstrap-time value 'de_DE', not null
+            $this->assertSame('de_DE', I18nDateTime::getDefaultLocale());
+        } finally {
+            I18nDateTime::setDefaultLocale($originalLocale);
+        }
+    }
+
+    /**
+     * Test that resetWorkerState() restores Number currency defaults to their
+     * post-bootstrap values when changed during a request.
+     */
+    public function testResetWorkerStateResetsNumberCurrencyDefaults(): void
+    {
+        $originalCurrency = Number::getDefaultCurrency();
+        $originalFormat = Number::getDefaultCurrencyFormat();
+
+        try {
+            $app = new MiddlewareApplication($this->config);
+            $server = new Server($app);
+            // Simulate bootstrap
+            $server->run(new ServerRequest());
+
+            // Simulate request changing currency settings
+            Number::setDefaultCurrency('EUR');
+            Number::setDefaultCurrencyFormat(Number::FORMAT_CURRENCY_ACCOUNTING);
+            $this->assertSame('EUR', Number::getDefaultCurrency());
+
+            $server->resetWorkerState();
+
+            // After reset the currency should be back to the post-bootstrap value
+            $this->assertNotSame('EUR', Number::getDefaultCurrency());
+        } finally {
+            Number::setDefaultCurrency($originalCurrency);
+            Number::setDefaultCurrencyFormat($originalFormat);
+        }
+    }
+
+    /**
+     * Test that resetWorkerState() preserves Number currency defaults that were
+     * explicitly set during bootstrap.
+     */
+    public function testResetWorkerStatePreservesBootstrapCurrencyDefault(): void
+    {
+        $originalCurrency = Number::getDefaultCurrency();
+        $originalFormat = Number::getDefaultCurrencyFormat();
+
+        try {
+            // Simulate an app that configures currency in bootstrap
+            Number::setDefaultCurrency('GBP');
+            Number::setDefaultCurrencyFormat(Number::FORMAT_CURRENCY_ACCOUNTING);
+
+            $app = new MiddlewareApplication($this->config);
+            $server = new Server($app);
+            // Run once to trigger bootstrap and capture bootstrap defaults
+            $server->run(new ServerRequest());
+
+            // Simulate request changing currency to something else
+            Number::setDefaultCurrency('JPY');
+            $this->assertSame('JPY', Number::getDefaultCurrency());
+
+            $server->resetWorkerState();
+
+            // Should be restored to the bootstrap-time value 'GBP'
+            $this->assertSame('GBP', Number::getDefaultCurrency());
+            $this->assertSame(Number::FORMAT_CURRENCY_ACCOUNTING, Number::getDefaultCurrencyFormat());
+        } finally {
+            Number::setDefaultCurrency($originalCurrency);
+            Number::setDefaultCurrencyFormat($originalFormat);
         }
     }
 }

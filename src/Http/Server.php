@@ -23,7 +23,9 @@ use Cake\Event\EventDispatcherInterface;
 use Cake\Event\EventDispatcherTrait;
 use Cake\Event\EventManager;
 use Cake\Event\EventManagerInterface;
+use Cake\I18n\DateTime as I18nDateTime;
 use Cake\I18n\I18n;
+use Cake\I18n\Number;
 use Cake\Routing\Router;
 use InvalidArgumentException;
 use Psr\Http\Message\ResponseInterface;
@@ -55,6 +57,18 @@ class Server implements EventDispatcherInterface
      * @var bool
      */
     protected bool $bootstrapped = false;
+
+    /**
+     * Snapshot of request-scoped I18n defaults captured after application bootstrap.
+     *
+     * Keyed by the static property name; used by resetWorkerState() to restore
+     * the post-bootstrap values between requests in FrankenPHP worker mode.
+     * Stored as instance state so that each Server instance (and each test)
+     * has its own independent snapshot.
+     *
+     * @var array<string, mixed>
+     */
+    protected array $_workerI18nSnapshot = [];
 
     /**
      * Constructor
@@ -137,6 +151,17 @@ class Server implements EventDispatcherInterface
         if ($this->app instanceof PluginApplicationInterface) {
             $this->app->pluginBootstrap();
         }
+        // Snapshot request-scoped I18n defaults after bootstrap so that
+        // resetWorkerState() can restore the post-bootstrap values between
+        // requests in FrankenPHP worker mode. Raw getters are used to avoid
+        // triggering lazy-initialisation side-effects.
+        if (class_exists(I18nDateTime::class, false)) {
+            $this->_workerI18nSnapshot['dateTimeDefaultLocale'] = I18nDateTime::getDefaultLocale();
+        }
+        if (class_exists(Number::class, false)) {
+            $this->_workerI18nSnapshot['numberDefaultCurrency'] = Number::getRawDefaultCurrency();
+            $this->_workerI18nSnapshot['numberDefaultCurrencyFormat'] = Number::getRawDefaultCurrencyFormat();
+        }
     }
 
     /**
@@ -185,6 +210,13 @@ class Server implements EventDispatcherInterface
      * - **I18n locale** - applications frequently change the active locale
      *   per-request (e.g. via `LocaleSelectorMiddleware`). The locale is
      *   restored to the value that was current when the worker first booted.
+     * - **DateTime default locale** - if `DateTime::setDefaultLocale()` is
+     *   called during request handling the value is restored to the
+     *   post-bootstrap default (null by default, meaning "use IntlDateFormatter's
+     *   own default").
+     * - **Number default currency / format** - if `Number::setDefaultCurrency()`
+     *   or `Number::setDefaultCurrencyFormat()` is called during a request the
+     *   values are restored to their post-bootstrap defaults.
      * - **Router request context** - the stale `ServerRequest` reference and
      *   request-specific routing parameters are cleared.
      * - **Container request binding** - the request object registered in the
@@ -229,6 +261,18 @@ class Server implements EventDispatcherInterface
         // the response has been sent (e.g. terminate-event handlers) cannot
         // accidentally read data from the previous request.
         Router::clearRequest();
+
+        // Restore I18n DateTime and Number defaults to their post-bootstrap
+        // values so that formatting settings changed during one request cannot
+        // leak into the next. Falls back to null (the class default) when
+        // these classes were loaded after bootstrap.
+        if (class_exists(I18nDateTime::class, false)) {
+            I18nDateTime::setDefaultLocale($this->_workerI18nSnapshot['dateTimeDefaultLocale'] ?? null);
+        }
+        if (class_exists(Number::class, false)) {
+            Number::setDefaultCurrency($this->_workerI18nSnapshot['numberDefaultCurrency'] ?? null);
+            Number::setDefaultCurrencyFormat($this->_workerI18nSnapshot['numberDefaultCurrencyFormat'] ?? null);
+        }
 
         if ($this->app instanceof ContainerApplicationInterface) {
             $container = $this->app->getContainer();
