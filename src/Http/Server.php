@@ -16,9 +16,11 @@ declare(strict_types=1);
  */
 namespace Cake\Http;
 
+use Cake\Cache\Cache;
 use Cake\Core\ContainerApplicationInterface;
 use Cake\Core\HttpApplicationInterface;
 use Cake\Core\PluginApplicationInterface;
+use Cake\Error\Debug\HtmlFormatter;
 use Cake\Event\EventDispatcherInterface;
 use Cake\Event\EventDispatcherTrait;
 use Cake\Event\EventManager;
@@ -162,6 +164,10 @@ class Server implements EventDispatcherInterface
             $this->_workerI18nSnapshot['numberDefaultCurrency'] = Number::getRawDefaultCurrency();
             $this->_workerI18nSnapshot['numberDefaultCurrencyFormat'] = Number::getRawDefaultCurrencyFormat();
         }
+        // Snapshot Cache enabled state so it can be restored if disabled mid-request.
+        if (class_exists(Cache::class, false)) {
+            $this->_workerI18nSnapshot['cacheEnabled'] = Cache::enabled();
+        }
     }
 
     /**
@@ -272,6 +278,23 @@ class Server implements EventDispatcherInterface
         if (class_exists(Number::class, false)) {
             Number::setDefaultCurrency($this->_workerI18nSnapshot['numberDefaultCurrency'] ?? null);
             Number::setDefaultCurrencyFormat($this->_workerI18nSnapshot['numberDefaultCurrencyFormat'] ?? null);
+        }
+
+        // Restore Cache enabled state to whatever it was after bootstrap.
+        // Prevents a request that calls Cache::disable() from affecting the next request.
+        if (class_exists(Cache::class, false)) {
+            $cacheEnabled = $this->_workerI18nSnapshot['cacheEnabled'] ?? true;
+            if ($cacheEnabled) {
+                Cache::enable();
+            } else {
+                Cache::disable();
+            }
+        }
+
+        // Reset the HTML debug formatter header flag so that each request that
+        // contains debug output emits the required CSS and JavaScript.
+        if (class_exists(HtmlFormatter::class, false)) {
+            HtmlFormatter::reset();
         }
 
         if ($this->app instanceof ContainerApplicationInterface) {

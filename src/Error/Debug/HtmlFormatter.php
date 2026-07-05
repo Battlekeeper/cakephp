@@ -32,6 +32,20 @@ class HtmlFormatter implements FormatterInterface
     protected static bool $outputHeader = false;
 
     /**
+     * Reset per-request state.
+     *
+     * Called by Server::resetWorkerState() between requests in a FrankenPHP
+     * worker process so that each HTTP response that contains debug output
+     * includes the necessary CSS and JavaScript header.
+     *
+     * @return void
+     */
+    public static function reset(): void
+    {
+        static::$outputHeader = false;
+    }
+
+    /**
      * Random id so that HTML ids are not shared between dump outputs.
      *
      * @var string
