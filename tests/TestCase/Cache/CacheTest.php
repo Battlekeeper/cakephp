@@ -56,6 +56,8 @@ class CacheTest extends TestCase
         Cache::drop('test_trigger');
         Cache::drop('tests_fallback');
         Cache::drop('tests_fallback_final');
+        Cache::drop('grouped_drop');
+        Cache::drop('worker_array');
     }
 
     /**
@@ -611,6 +613,47 @@ class CacheTest extends TestCase
             Cache::pool('unconfigTest'),
         );
         $this->assertTrue(Cache::drop('unconfigTest'));
+    }
+
+    /**
+     * test that drop removes cache configs from group mappings.
+     */
+    public function testDropRemovesGroupConfigs(): void
+    {
+        Cache::setConfig('grouped_drop', [
+            'engine' => 'Array',
+            'groups' => ['worker_group_drop'],
+        ]);
+
+        $this->assertSame(
+            ['worker_group_drop' => ['grouped_drop']],
+            Cache::groupConfigs('worker_group_drop'),
+        );
+
+        $this->assertTrue(Cache::drop('grouped_drop'));
+
+        $this->expectException(InvalidArgumentException::class);
+        Cache::groupConfigs('worker_group_drop');
+    }
+
+    /**
+     * test resetWorkerState() clears process-local engine data without unloading configs.
+     */
+    public function testResetWorkerStateClearsProcessLocalEngineData(): void
+    {
+        Cache::setConfig('worker_array', [
+            'engine' => 'Array',
+            'prefix' => 'worker_array_',
+        ]);
+
+        $this->assertTrue(Cache::write('key', 'value', 'worker_array'));
+        $pool = Cache::pool('worker_array');
+
+        Cache::resetWorkerState();
+
+        $this->assertSame($pool, Cache::pool('worker_array'));
+        $this->assertContains('worker_array', Cache::configured());
+        $this->assertNull(Cache::read('key', 'worker_array'));
     }
 
     /**

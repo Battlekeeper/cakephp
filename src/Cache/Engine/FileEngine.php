@@ -111,6 +111,16 @@ class FileEngine extends CacheEngine
     }
 
     /**
+     * Release the last cache file handle between worker requests.
+     *
+     * @return void
+     */
+    public function resetWorkerState(): void
+    {
+        unset($this->_File);
+    }
+
+    /**
      * Write data for key into cache
      *
      * @param string $key Identifier for the data

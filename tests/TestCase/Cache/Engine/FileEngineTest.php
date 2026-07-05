@@ -21,6 +21,7 @@ use Cake\Cache\Engine\FileEngine;
 use Cake\Core\Configure;
 use Cake\TestSuite\TestCase;
 use DateInterval;
+use ReflectionProperty;
 
 /**
  * FileEngineTest class
@@ -111,6 +112,25 @@ class FileEngineTest extends TestCase
         $this->assertSame($expecting, $result);
 
         Cache::delete('test', 'file_test');
+    }
+
+    /**
+     * Test resetWorkerState() releases the open cache file handle.
+     */
+    public function testResetWorkerStateReleasesOpenFileHandle(): void
+    {
+        $this->assertTrue(Cache::write('worker_file', 'value', 'file_test'));
+
+        $engine = Cache::pool('file_test');
+        $this->assertInstanceOf(FileEngine::class, $engine);
+        $this->assertSame('value', Cache::read('worker_file', 'file_test'));
+
+        $property = new ReflectionProperty(FileEngine::class, '_File');
+        $this->assertTrue($property->isInitialized($engine));
+
+        $engine->resetWorkerState();
+
+        $this->assertFalse($property->isInitialized($engine));
     }
 
     /**

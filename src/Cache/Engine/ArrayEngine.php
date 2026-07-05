@@ -55,6 +55,16 @@ class ArrayEngine extends CacheEngine
     protected array $data = [];
 
     /**
+     * Clear process-local cache data between worker requests.
+     *
+     * @return void
+     */
+    public function resetWorkerState(): void
+    {
+        $this->data = [];
+    }
+
+    /**
      * Write data for key into cache
      *
      * @param string $key Identifier for the data

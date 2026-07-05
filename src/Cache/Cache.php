@@ -66,7 +66,9 @@ use RuntimeException;
  */
 class Cache
 {
-    use StaticConfigTrait;
+    use StaticConfigTrait {
+        drop as protected _dropConfig;
+    }
 
     /**
      * An array mapping URL schemes to fully qualified caching engine
@@ -125,6 +127,51 @@ class Cache
     public static function setRegistry(CacheRegistry $registry): void
     {
         static::$_registry = $registry;
+    }
+
+    /**
+     * Drops a constructed adapter and removes static group mappings.
+     *
+     * @param string $config An existing configuration you wish to remove.
+     * @return bool Success of the removal, returns false when the config does not exist.
+     */
+    public static function drop(string $config): bool
+    {
+        $success = static::_dropConfig($config);
+        if (!$success) {
+            return false;
+        }
+
+        foreach (static::$_groups as $group => $configs) {
+            $configs = array_values(array_diff($configs, [$config]));
+            if ($configs === []) {
+                unset(static::$_groups[$group]);
+                continue;
+            }
+
+            static::$_groups[$group] = $configs;
+        }
+
+        return true;
+    }
+
+    /**
+     * Reset request-scoped cache engine state retained in memory.
+     *
+     * This is intended for long-running worker processes. Configured cache
+     * pools stay loaded so external backend connections can be reused.
+     *
+     * @return void
+     */
+    public static function resetWorkerState(): void
+    {
+        if (!isset(static::$_registry)) {
+            return;
+        }
+
+        foreach (static::$_registry as $engine) {
+            $engine->resetWorkerState();
+        }
     }
 
     /**

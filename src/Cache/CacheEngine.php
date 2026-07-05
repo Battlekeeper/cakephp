@@ -105,6 +105,19 @@ abstract class CacheEngine implements CacheInterface, CacheEngineInterface, Even
     }
 
     /**
+     * Reset request-scoped state retained by this cache engine.
+     *
+     * Long-running worker processes call this between requests. Engines backed
+     * by external services generally have no request-scoped state and can keep
+     * their backend connections open.
+     *
+     * @return void
+     */
+    public function resetWorkerState(): void
+    {
+    }
+
+    /**
      * Ensure the validity of the given cache key.
      *
      * @param mixed $key Key to check.

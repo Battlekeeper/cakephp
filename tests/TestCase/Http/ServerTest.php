@@ -16,6 +16,7 @@ declare(strict_types=1);
  */
 namespace Cake\Test\TestCase\Http;
 
+use Cake\Cache\Cache;
 use Cake\Core\HttpApplicationInterface;
 use Cake\Event\EventInterface;
 use Cake\Event\EventManager;
@@ -82,6 +83,7 @@ class ServerTest extends TestCase
         parent::tearDown();
         $_SERVER = $this->server;
         unset($GLOBALS['mockedHeadersSent']);
+        Cache::drop('server_worker_array');
     }
 
     /**
@@ -525,6 +527,35 @@ class ServerTest extends TestCase
         } finally {
             I18n::setLocale($originalLocale);
             Router::reload();
+        }
+    }
+
+    /**
+     * Test that resetWorkerState() resets loaded cache engine worker state.
+     */
+    public function testResetWorkerStateResetsCacheWorkerState(): void
+    {
+        Cache::enable();
+        Cache::setConfig('server_worker_array', [
+            'engine' => 'Array',
+            'prefix' => 'server_worker_array_',
+        ]);
+
+        try {
+            $app = new MiddlewareApplication($this->config);
+            $server = new Server($app);
+            $server->run(new ServerRequest());
+
+            Cache::write('key', 'value', 'server_worker_array');
+            Cache::disable();
+
+            $server->resetWorkerState();
+
+            $this->assertTrue(Cache::enabled());
+            $this->assertNull(Cache::read('key', 'server_worker_array'));
+        } finally {
+            Cache::enable();
+            Cache::drop('server_worker_array');
         }
     }
 

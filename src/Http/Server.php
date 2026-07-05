@@ -253,6 +253,8 @@ class Server implements EventDispatcherInterface
      *   values are restored to their post-bootstrap defaults.
      * - **Router request context** - the stale `ServerRequest` reference and
      *   request-specific routing parameters are cleared.
+     * - **Cache worker state** - the cache enabled flag is restored and loaded
+     *   engines release request-scoped in-memory state.
      * - **Container request binding** - the request object registered in the
      *   application container is removed when the container supports removal.
      *
@@ -317,6 +319,7 @@ class Server implements EventDispatcherInterface
             } else {
                 Cache::disable();
             }
+            Cache::resetWorkerState();
         }
 
         // Reset the HTML debug formatter header flag so that each request that
