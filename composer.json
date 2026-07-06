@@ -31,6 +31,8 @@
         "laminas/laminas-diactoros": "^3.8",
         "laminas/laminas-httphandlerrunner": "^2.6",
         "league/container": "^5.1",
+        "nyholm/psr7": "^1.8",
+        "nyholm/psr7-server": "^1.1",
         "psr/container": "^1.1 || ^2.0",
         "psr/http-client": "^1.0.2",
         "psr/http-factory": "^1.1",
@@ -38,7 +40,8 @@
         "psr/http-server-handler": "^1.0.2",
         "psr/http-server-middleware": "^1.0.2",
         "psr/log": "^3.0",
-        "psr/simple-cache": "^2.0 || ^3.0"
+        "psr/simple-cache": "^2.0 || ^3.0",
+        "spiral/roadrunner-http": "^4.1"
     },
     "replace": {
         "cakephp/cache": "self.version",
