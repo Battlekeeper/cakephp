@@ -100,16 +100,41 @@ class ServerRequestFactory implements ServerRequestFactoryInterface
     {
         $server = normalizeServer($request->getServerParams());
 
-        // The PSR-7 URI is always built directly from the HTTP Host header and
-        // request-target by the application server (e.g. RoadRunner). The server
-        // params it populates for SERVER_NAME / HTTP_HOST may contain an internal
-        // bind address ("localhost") rather than the value from the Host header.
-        // Override the server params with the PSR-7 URI authority so that
-        // marshalUriAndBaseFromSapi() constructs the correct URI instead of
-        // falling back to "localhost".
+        // Inject the correct host into the CGI-style server params.
+        //
+        // Worker-mode application servers (e.g. RoadRunner) may omit HTTP_HOST
+        // from their server params entirely, or they may populate it with an
+        // internal bind address rather than the value the client sent. We
+        // therefore derive the host from two sources in order of reliability:
+        //
+        //   1. The PSR-7 Host request header — this is always populated from
+        //      the raw HTTP "Host:" header by the PSR-7 factory (the value the
+        //      client actually sent) and is the most authoritative source.
+        //   2. The PSR-7 URI host component — a fallback for the rare case
+        //      where the Host header is absent.
+        //
+        // Without this, marshalUriAndBaseFromSapi() falls back to "localhost",
+        // and $_SERVER['HTTP_HOST'] (relied on by many framework and application
+        // components) would be absent or wrong.
         $psr7Uri = $request->getUri();
+        $hostHeader = $request->getHeaderLine('Host');
         $psr7Host = $psr7Uri->getHost();
-        if ($psr7Host !== '') {
+
+        if ($hostHeader !== '') {
+            // Use the Host header verbatim for HTTP_HOST (per CGI spec, HTTP_HOST
+            // is the exact value of the Host request header, port included).
+            $server['HTTP_HOST'] = $hostHeader;
+            if (str_contains($hostHeader, ':')) {
+                [$hostPart, $portPart] = explode(':', $hostHeader, 2);
+                $server['SERVER_NAME'] = $hostPart;
+                if (ctype_digit($portPart)) {
+                    $server['SERVER_PORT'] = $portPart;
+                }
+            } else {
+                $server['SERVER_NAME'] = $hostHeader;
+            }
+        } elseif ($psr7Host !== '') {
+            // Fallback: use the URI host (may be absent for non-standard requests).
             $port = $psr7Uri->getPort();
             $server['HTTP_HOST'] = $port !== null ? "{$psr7Host}:{$port}" : $psr7Host;
             $server['SERVER_NAME'] = $psr7Host;
