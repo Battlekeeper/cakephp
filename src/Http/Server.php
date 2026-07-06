@@ -608,9 +608,13 @@ class Server implements EventDispatcherInterface
     {
         $_SESSION = [];
 
-        if (session_status() !== PHP_SESSION_ACTIVE && session_id() !== '' && !headers_sent()) {
-            session_id('');
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_write_close();
         }
+        // session_id('') is a no-op in PHP 8.0+ (issues E_WARNING, returns
+        // false, does not clear the ID). Worker scripts must reset the session
+        // ID at the start of each request (e.g. via syncGlobalsFromRequest in
+        // roadrunner/worker.php) rather than relying on cleanup to clear it.
     }
 
     /**

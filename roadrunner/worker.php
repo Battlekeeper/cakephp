@@ -95,6 +95,22 @@ function syncGlobalsFromRequest(ServerRequest $request): void
 
     $parsedBody = $request->getParsedBody();
     $_POST = is_array($parsedBody) ? $parsedBody : [];
+
+    // In a persistent CLI worker PHP never runs SAPI request startup between
+    // requests, so session_id() retains the value from the previous request.
+    // session_id('') is a no-op in PHP 8.0+ (issues a warning, returns false,
+    // and does not clear the ID). We therefore explicitly set the session ID
+    // from the incoming cookie so session_start() resumes the correct session,
+    // or assign a fresh random ID when there is no cookie to prevent
+    // session_start() from accidentally resuming a previous request's session.
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        $incomingSessionId = $_COOKIE[session_name()] ?? '';
+        if ($incomingSessionId !== '') {
+            session_id($incomingSessionId);
+        } elseif (session_id() !== '') {
+            session_id(session_create_id());
+        }
+    }
 }
 
 function clearRequestGlobals(): void
@@ -116,9 +132,11 @@ function clearSessionState(): void
 {
     $_SESSION = [];
 
-    if (session_status() !== PHP_SESSION_ACTIVE && session_id() !== '' && !headers_sent()) {
-        session_id('');
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        session_write_close();
     }
+    // session_id('') is a no-op in PHP 8.0+; the ID is reset at the start
+    // of the next request inside syncGlobalsFromRequest().
 }
 
 function isRequestServerKey(string $key): bool
