@@ -85,6 +85,55 @@ class ServerRequestFactory implements ServerRequestFactoryInterface
     }
 
     /**
+     * Create a Cake\Http\ServerRequest from a PSR-7 ServerRequestInterface.
+     *
+     * This is useful when integrating with application servers such as RoadRunner
+     * or Swoole that hand a PSR-7 request object directly to the framework,
+     * bypassing PHP's superglobals. The resulting request exposes all
+     * CakePHP-specific methods (e.g. `clientIp()`, `is()`, `getSession()`) that
+     * are not part of the PSR-7 interface.
+     *
+     * @param \Psr\Http\Message\ServerRequestInterface $request PSR-7 server request to convert.
+     * @return \Cake\Http\ServerRequest
+     */
+    public static function fromPsr7Request(ServerRequestInterface $request): ServerRequest
+    {
+        $server = normalizeServer($request->getServerParams());
+        ['uri' => $uri, 'base' => $base, 'webroot' => $webroot] = UriFactory::marshalUriAndBaseFromSapi($server);
+
+        $sessionConfig = (array)Configure::read('Session') + [
+            'defaults' => 'php',
+            'cookiePath' => $webroot,
+        ];
+        $session = Session::create($sessionConfig);
+
+        $cakeRequest = new ServerRequest([
+            'environment' => $server,
+            'uri' => $uri,
+            'cookies' => $request->getCookieParams(),
+            'query' => $request->getQueryParams(),
+            'webroot' => $webroot,
+            'base' => $base,
+            'session' => $session,
+            'input' => (string)$request->getBody(),
+        ]);
+
+        $parsedBody = $request->getParsedBody();
+        $cakeRequest = static::marshalBodyAndRequestMethod(is_array($parsedBody) ? $parsedBody : [], $cakeRequest);
+
+        // Preserve object-shaped parsed bodies (e.g. decoded JSON).
+        if (is_object($parsedBody)) {
+            $cakeRequest = $cakeRequest->withParsedBody($parsedBody);
+        }
+
+        // Re-align the URI scheme with what CakePHP resolves (honours trustProxy).
+        $uri = $cakeRequest->getUri()->withScheme($cakeRequest->scheme());
+        $cakeRequest = $cakeRequest->withUri($uri, true);
+
+        return $cakeRequest->withUploadedFiles($request->getUploadedFiles());
+    }
+
+    /**
      * Sets the REQUEST_METHOD environment variable based on the simulated _method
      * HTTP override value. The 'ORIGINAL_REQUEST_METHOD' is also preserved, if you
      * want the read the non-simulated HTTP method the client used.

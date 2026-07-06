@@ -140,6 +140,9 @@ class Server implements EventDispatcherInterface
         $this->bootstrap();
 
         $request = $request ?: ServerRequestFactory::fromGlobals();
+        if (!($request instanceof ServerRequest)) {
+            $request = ServerRequestFactory::fromPsr7Request($request);
+        }
 
         if ($middlewareQueue === null) {
             if ($this->app instanceof ContainerApplicationInterface) {
