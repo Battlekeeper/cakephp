@@ -12,7 +12,7 @@ declare(strict_types=1);
  *
  * ## Requirements
  *
- * Install the RoadRunner HTTP worker package in your application:
+ * Install the RoadRunner HTTP worker package and Nyholm PSR-7 factory:
  *
  *   composer require spiral/roadrunner-http nyholm/psr7
  *
@@ -83,9 +83,7 @@ declare(strict_types=1);
 use App\Application;
 use Cake\Http\Server;
 use Cake\Routing\Router;
-use Laminas\Diactoros\ServerRequestFactory;
-use Laminas\Diactoros\StreamFactory;
-use Laminas\Diactoros\UploadedFileFactory;
+use Nyholm\Psr7\Factory\Psr17Factory;
 use Spiral\RoadRunner;
 use Spiral\RoadRunner\Http\PSR7Worker;
 
@@ -101,15 +99,19 @@ $server->setWorkerMode();
 // RoadRunner worker setup
 //
 // PSR7Worker converts the RoadRunner binary protocol into PSR-7 objects.
-// Laminas Diactoros factories are used here because CakePHP already depends
-// on laminas/laminas-diactoros. If you have installed nyholm/psr7 you may
-// substitute Nyholm\Psr7\Factory\Psr17Factory for all three factories.
+// A single Psr17Factory instance satisfies all three factory interfaces
+// (ServerRequestFactoryInterface, StreamFactoryInterface,
+// UploadedFileFactoryInterface). Using Nyholm here ensures that the Host
+// request header is correctly populated on the resulting PSR-7 object so
+// that ServerRequestFactory::fromPsr7Request() can derive HTTP_HOST from
+// $request->getHeaderLine('Host') rather than falling back to 'localhost'.
 // ---------------------------------------------------------------------------
+$psr17Factory = new Psr17Factory();
 $rrWorker = new PSR7Worker(
     RoadRunner\Worker::create(),
-    new ServerRequestFactory(),
-    new StreamFactory(),
-    new UploadedFileFactory(),
+    $psr17Factory,
+    $psr17Factory,
+    $psr17Factory,
 );
 
 $maxRequests = (int)($_SERVER['MAX_REQUESTS'] ?? 0);
