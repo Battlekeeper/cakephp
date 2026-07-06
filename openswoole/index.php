@@ -60,6 +60,8 @@ declare(strict_types=1);
  */
 
 use App\Application;
+use Cake\Http\Cookie\CookieInterface;
+use Cake\Http\Response as CakeResponse;
 use Cake\Http\Server;
 use Cake\Http\ServerRequestFactory;
 use OpenSwoole\HTTP\Request as SwooleRequest;
@@ -76,7 +78,7 @@ require dirname(__DIR__) . '/vendor/autoload.php';
 
 $host = (string)($_ENV['HOST'] ?? '0.0.0.0');
 $port = (int)($_ENV['PORT'] ?? 9501);
-$workerNum = (int)($_ENV['WORKER_NUM'] ?? swoole_cpu_num());
+$workerNum = (int)($_ENV['WORKER_NUM'] ?? OpenSwoole\Util::getCPUNum());
 $maxRequests = (int)($_ENV['MAX_REQUESTS'] ?? 0);
 
 $swServer = new SwooleServer($host, $port);
@@ -241,6 +243,15 @@ function sendResponse(ResponseInterface $response, SwooleResponse $swResponse): 
 {
     $swResponse->status($response->getStatusCode(), $response->getReasonPhrase());
 
+    // Collect cookies from CakePHP's cookie collection (set via withCookie()).
+    // These are NOT reflected in the PSR-7 Set-Cookie header – they live in a
+    // separate CookieCollection on Cake\Http\Response and would be silently
+    // dropped if we only iterate getHeaders().
+    $collectionCookies = [];
+    if ($response instanceof CakeResponse) {
+        $collectionCookies = iterator_to_array($response->getCookieCollection());
+    }
+
     foreach ($response->getHeaders() as $name => $values) {
         // OpenSwoole's header() overwrites the previous value when the same
         // header name is set twice. For Set-Cookie (the only standard header
@@ -248,35 +259,71 @@ function sendResponse(ResponseInterface $response, SwooleResponse $swResponse): 
         // use rawcookie() so that each cookie is sent in its own header line.
         if (strtolower($name) === 'set-cookie') {
             foreach ($values as $cookieLine) {
-                // Parse the Set-Cookie line into components expected by rawcookie().
-                // CakePHP emits fully-formed Set-Cookie header values, so we split
-                // on semicolons to extract the name=value pair and attributes.
-                $parts = array_map('trim', explode(';', $cookieLine));
-                [$cookieName, $cookieValue] = array_pad(explode('=', array_shift($parts), 2), 2, '');
-
-                $attrs = [];
-                foreach ($parts as $part) {
-                    [$attrKey, $attrVal] = array_pad(explode('=', $part, 2), 2, '');
-                    $attrs[strtolower(trim($attrKey))] = trim($attrVal);
-                }
-
-                $swResponse->rawcookie(
-                    $cookieName,
-                    $cookieValue,
-                    isset($attrs['expires']) ? (int)strtotime($attrs['expires']) : 0,
-                    $attrs['path'] ?? '/',
-                    $attrs['domain'] ?? '',
-                    isset($attrs['secure']),
-                    isset($attrs['httponly']),
-                    $attrs['samesite'] ?? '',
-                );
+                emitRawCookieLine($cookieLine, $swResponse);
             }
         } else {
             $swResponse->header($name, implode(', ', $values));
         }
     }
 
+    foreach ($collectionCookies as $cookie) {
+        emitCookieObject($cookie, $swResponse);
+    }
+
     $body = $response->getBody();
     $body->rewind();
     $swResponse->end($body->getContents());
+}
+
+/**
+ * Emit a fully-formed Set-Cookie header string via OpenSwoole rawcookie().
+ *
+ * @param string $cookieLine A complete Set-Cookie header value.
+ * @param \OpenSwoole\HTTP\Response $swResponse The OpenSwoole response handle.
+ * @return void
+ */
+function emitRawCookieLine(string $cookieLine, SwooleResponse $swResponse): void
+{
+    // CakePHP emits fully-formed Set-Cookie header values, so we split
+    // on semicolons to extract the name=value pair and attributes.
+    $parts = array_map('trim', explode(';', $cookieLine));
+    [$cookieName, $cookieValue] = array_pad(explode('=', array_shift($parts), 2), 2, '');
+
+    $attrs = [];
+    foreach ($parts as $part) {
+        [$attrKey, $attrVal] = array_pad(explode('=', $part, 2), 2, '');
+        $attrs[strtolower(trim($attrKey))] = trim($attrVal);
+    }
+
+    $swResponse->rawcookie(
+        $cookieName,
+        $cookieValue,
+        isset($attrs['expires']) ? (int)strtotime($attrs['expires']) : 0,
+        $attrs['path'] ?? '/',
+        $attrs['domain'] ?? '',
+        isset($attrs['secure']),
+        isset($attrs['httponly']),
+        $attrs['samesite'] ?? '',
+    );
+}
+
+/**
+ * Emit a CakePHP CookieInterface object via OpenSwoole rawcookie().
+ *
+ * @param \Cake\Http\Cookie\CookieInterface $cookie The cookie to emit.
+ * @param \OpenSwoole\HTTP\Response $swResponse The OpenSwoole response handle.
+ * @return void
+ */
+function emitCookieObject(CookieInterface $cookie, SwooleResponse $swResponse): void
+{
+    $swResponse->rawcookie(
+        $cookie->getName(),
+        $cookie->getScalarValue(),
+        $cookie->getExpiresTimestamp() ?? 0,
+        $cookie->getPath(),
+        $cookie->getDomain(),
+        $cookie->isSecure(),
+        $cookie->isHttpOnly(),
+        $cookie->getSameSite()?->value ?? '',
+    );
 }
