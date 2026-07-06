@@ -170,12 +170,14 @@ class Server implements EventDispatcherInterface
 
         $response = $this->runner->run($middleware, $request, $this->app);
 
-        if ($request instanceof ServerRequest) {
-            $request->getSession()->close();
+        if ($this->workerMode && $request instanceof ServerRequest) {
+            // Add the session cookie before the session is closed so that
+            // session_id() is still valid when we read it.
+            $response = $this->addSessionCookie($request, $response);
         }
 
-        if ($this->workerMode) {
-            $response = $this->flushNativeHeaders($response);
+        if ($request instanceof ServerRequest) {
+            $request->getSession()->close();
         }
 
         return $response;
@@ -479,43 +481,80 @@ class Server implements EventDispatcherInterface
     }
 
     /**
-     * Merge PHP's native header buffer into a PSR-7 response and clear the buffer.
+     * Add the session cookie to the response when running in worker mode.
      *
-     * In long-lived worker processes PHP's SAPI never flushes headers on its
-     * own, so any header() or setcookie() call made during the request cycle —
-     * most importantly the Set-Cookie header emitted by session_start() for
-     * the PHPSESSID — would be silently discarded if not captured here.
+     * In CLI-based worker processes (RoadRunner, Swoole, etc.) PHP's SAPI
+     * never handles HTTP headers, so even when session_start() is called it
+     * does not queue a Set-Cookie header for PHPSESSID. This method replicates
+     * that header explicitly using the same session.cookie_* ini settings PHP
+     * itself reads in FPM mode.
      *
-     * All queued native headers are transferred to the PSR-7 response using
-     * withAddedHeader() so that multiple Set-Cookie values can coexist. The
-     * native buffer is then cleared via header_remove() so that the
-     * application-server worker (e.g. RoadRunner's PSR7Worker) does not
-     * encounter them a second time and produce duplicates.
+     * The cookie is only emitted when:
+     * - The session was actually started during this request.
+     * - The session ID differs from the one the client sent (new session or
+     *   after session_regenerate_id()), matching PHP-FPM behaviour where the
+     *   header is only written for new or regenerated sessions.
      *
-     * @param \Psr\Http\Message\ResponseInterface $response The response to enrich.
+     * Must be called before Session::close() so that session_id() is valid.
+     *
+     * @param \Cake\Http\ServerRequest $request The current request.
+     * @param \Psr\Http\Message\ResponseInterface $response The response to add the cookie to.
      * @return \Psr\Http\Message\ResponseInterface
      */
-    protected function flushNativeHeaders(ResponseInterface $response): ResponseInterface
+    protected function addSessionCookie(ServerRequest $request, ResponseInterface $response): ResponseInterface
     {
-        $nativeHeaders = headers_list();
-        if (!$nativeHeaders) {
+        if (!$request->getSession()->started()) {
             return $response;
         }
 
-        header_remove();
-
-        foreach ($nativeHeaders as $header) {
-            [$name, $value] = explode(':', $header, 2);
-            $name = trim($name);
-            $value = trim($value);
-            // Use withAddedHeader so that multiple Set-Cookie lines are
-            // preserved.  For other header names this may create duplicates
-            // only when both PHP's session layer and CakePHP's response
-            // pipeline set the same header, which is rare and harmless.
-            $response = $response->withAddedHeader($name, $value);
+        $sessionId = session_id();
+        if ($sessionId === '') {
+            return $response;
         }
 
-        return $response;
+        $sessionName = session_name();
+
+        // Don't re-send the cookie when the client already holds this session
+        // ID (matches PHP-FPM behaviour: the header is only emitted for new
+        // sessions or after session_regenerate_id()).
+        $incomingId = $request->getCookieParams()[$sessionName] ?? null;
+        if ($incomingId === $sessionId) {
+            return $response;
+        }
+
+        // Build the Set-Cookie value mirroring PHP's own session cookie output.
+        $cookieValue = urlencode($sessionName) . '=' . urlencode($sessionId);
+
+        $lifetime = (int)ini_get('session.cookie_lifetime');
+        if ($lifetime > 0) {
+            $cookieValue .= '; expires=' . gmdate('D, d-M-Y H:i:s', time() + $lifetime) . ' GMT';
+            $cookieValue .= '; Max-Age=' . $lifetime;
+        }
+
+        $path = (string)ini_get('session.cookie_path');
+        if ($path !== '') {
+            $cookieValue .= '; path=' . $path;
+        }
+
+        $domain = (string)ini_get('session.cookie_domain');
+        if ($domain !== '') {
+            $cookieValue .= '; domain=' . $domain;
+        }
+
+        if (filter_var(ini_get('session.cookie_secure'), FILTER_VALIDATE_BOOLEAN)) {
+            $cookieValue .= '; secure';
+        }
+
+        if (filter_var(ini_get('session.cookie_httponly'), FILTER_VALIDATE_BOOLEAN)) {
+            $cookieValue .= '; httponly';
+        }
+
+        $sameSite = (string)ini_get('session.cookie_samesite');
+        if ($sameSite !== '') {
+            $cookieValue .= '; SameSite=' . $sameSite;
+        }
+
+        return $response->withAddedHeader('Set-Cookie', $cookieValue);
     }
 
     /**

@@ -246,7 +246,7 @@ class Session
             $this->engine($class, $config['handler']);
         }
 
-        $this->_isCLI = (PHP_SAPI === 'cli' || PHP_SAPI === 'phpdbg');
+        $this->_isCLI = $config['isCLI'] ?? (PHP_SAPI === 'cli' || PHP_SAPI === 'phpdbg');
         session_register_shutdown();
     }
 

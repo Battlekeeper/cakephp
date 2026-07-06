@@ -123,6 +123,12 @@ class ServerRequestFactory implements ServerRequestFactoryInterface
         $sessionConfig = (array)Configure::read('Session') + [
             'defaults' => 'php',
             'cookiePath' => $webroot,
+            // Force real PHP session handling even in CLI-based workers
+            // (e.g. RoadRunner) where PHP_SAPI === 'cli'. Without this,
+            // Session::start() takes the CLI shortcut that assigns a fake
+            // 'cli' session ID and never calls session_start(), making
+            // sessions completely non-functional in worker mode.
+            'isCLI' => false,
         ];
         $session = Session::create($sessionConfig);
 
