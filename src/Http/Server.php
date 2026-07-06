@@ -171,6 +171,14 @@ class Server implements EventDispatcherInterface
         $response = $this->runner->run($middleware, $request, $this->app);
 
         if ($this->workerMode && $request instanceof ServerRequest) {
+            // Promote cookies stored in Response::$_cookies (CookieCollection)
+            // into PSR-7 Set-Cookie headers. In PHP-FPM mode the ResponseEmitter
+            // handles these via setcookie(); in worker mode the application
+            // server (e.g. RoadRunner) reads only PSR-7 headers via getHeaders(),
+            // so any cookie set through $response->withCookie() would be silently
+            // dropped without this step.
+            $response = $this->serializeResponseCookies($response);
+
             // Add the session cookie before the session is closed so that
             // session_id() is still valid when we read it.
             $response = $this->addSessionCookie($request, $response);
@@ -478,6 +486,37 @@ class Server implements EventDispatcherInterface
         $parsedBody = $request->getParsedBody();
         $_POST = is_array($parsedBody) ? $parsedBody : [];
         $this->populatedSuperglobals = true;
+    }
+
+    /**
+     * Promote cookies from the CakePHP CookieCollection into PSR-7 Set-Cookie headers.
+     *
+     * Cake\Http\Response stores cookies added via withCookie() in a separate
+     * CookieCollection property that is invisible to PSR-7 header accessors
+     * such as getHeaders() and getHeader('Set-Cookie'). Application servers
+     * (e.g. RoadRunner, Swoole) read only the PSR-7 header store, so without
+     * this step every cookie set by middleware through $response->withCookie()
+     * — including CSRF tokens, remember-me cookies, and flash indicators —
+     * would be silently dropped before reaching the browser.
+     *
+     * In the normal PHP-FPM flow this is handled by ResponseEmitter which
+     * calls setcookie() for each cookie in the collection, so this method
+     * is only invoked in worker mode.
+     *
+     * @param \Psr\Http\Message\ResponseInterface $response The response to enrich.
+     * @return \Psr\Http\Message\ResponseInterface
+     */
+    protected function serializeResponseCookies(ResponseInterface $response): ResponseInterface
+    {
+        if (!($response instanceof Response)) {
+            return $response;
+        }
+
+        foreach ($response->getCookieCollection() as $cookie) {
+            $response = $response->withAddedHeader('Set-Cookie', $cookie->toHeaderValue());
+        }
+
+        return $response;
     }
 
     /**
