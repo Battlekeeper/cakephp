@@ -99,6 +99,25 @@ class ServerRequestFactory implements ServerRequestFactoryInterface
     public static function fromPsr7Request(ServerRequestInterface $request): ServerRequest
     {
         $server = normalizeServer($request->getServerParams());
+
+        // The PSR-7 URI is always built directly from the HTTP Host header and
+        // request-target by the application server (e.g. RoadRunner). The server
+        // params it populates for SERVER_NAME / HTTP_HOST may contain an internal
+        // bind address ("localhost") rather than the value from the Host header.
+        // Override the server params with the PSR-7 URI authority so that
+        // marshalUriAndBaseFromSapi() constructs the correct URI instead of
+        // falling back to "localhost".
+        $psr7Uri = $request->getUri();
+        $psr7Host = $psr7Uri->getHost();
+        if ($psr7Host !== '') {
+            $port = $psr7Uri->getPort();
+            $server['HTTP_HOST'] = $port !== null ? "{$psr7Host}:{$port}" : $psr7Host;
+            $server['SERVER_NAME'] = $psr7Host;
+            if ($port !== null) {
+                $server['SERVER_PORT'] = (string)$port;
+            }
+        }
+
         ['uri' => $uri, 'base' => $base, 'webroot' => $webroot] = UriFactory::marshalUriAndBaseFromSapi($server);
 
         $sessionConfig = (array)Configure::read('Session') + [
