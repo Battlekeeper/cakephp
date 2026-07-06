@@ -37,6 +37,8 @@ use InvalidArgumentException;
 use Laminas\Diactoros\Response as LaminasResponse;
 use Laminas\Diactoros\ServerRequest as LaminasServerRequest;
 use Mockery;
+use PHPUnit\Framework\Attributes\PreserveGlobalState;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use TestApp\Http\MiddlewareApplication;
@@ -300,6 +302,47 @@ class ServerTest extends TestCase
             $res->getHeaderLine('X-testing'),
             'Application was expected to be executed',
         );
+    }
+
+    #[PreserveGlobalState(false)]
+    #[RunInSeparateProcess]
+    public function testRunAddsSessionCookieForClosedNativeSessionInWorkerMode(): void
+    {
+        $app = new class implements HttpApplicationInterface {
+            public function bootstrap(): void
+            {
+            }
+
+            public function middleware(MiddlewareQueue $middlewareQueue): MiddlewareQueue
+            {
+                return $middlewareQueue;
+            }
+
+            public function handle(ServerRequestInterface $request): ResponseInterface
+            {
+                session_id('closed-session-id');
+
+                return new LaminasResponse();
+            }
+        };
+
+        $server = new Server($app);
+        $server->setWorkerMode();
+        $request = new ServerRequest([
+            'session' => new Session(['isCLI' => false]),
+        ]);
+
+        try {
+            $response = $server->run($request);
+        } finally {
+            $server->resetWorkerState();
+            Router::setRouteCaching(false);
+        }
+
+        $cookies = $response->getHeader('Set-Cookie');
+
+        $this->assertCount(1, $cookies);
+        $this->assertStringStartsWith('PHPSESSID=closed-session-id;', $cookies[0]);
     }
 
     /**

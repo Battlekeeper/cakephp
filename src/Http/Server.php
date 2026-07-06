@@ -342,6 +342,8 @@ class Server implements EventDispatcherInterface
      */
     public function resetWorkerState(): void
     {
+        $this->clearNativeSessionState();
+
         // Clear superglobals that were populated from the PSR-7 request so
         // that one request's cookies, query params, and server data cannot
         // bleed into the next request.  This is especially important for
@@ -543,10 +545,6 @@ class Server implements EventDispatcherInterface
      */
     protected function addSessionCookie(ServerRequest $request, ResponseInterface $response): ResponseInterface
     {
-        if (!$request->getSession()->started()) {
-            return $response;
-        }
-
         $sessionId = session_id();
         if ($sessionId === '') {
             return $response;
@@ -595,6 +593,24 @@ class Server implements EventDispatcherInterface
         }
 
         return $response->withAddedHeader('Set-Cookie', $cookieValue);
+    }
+
+    /**
+     * Clear native PHP session state between worker-mode requests.
+     *
+     * session_write_close() leaves session_id() populated after closing the
+     * session. In a long-lived worker this would otherwise carry a stale
+     * session ID into the next request.
+     *
+     * @return void
+     */
+    protected function clearNativeSessionState(): void
+    {
+        $_SESSION = [];
+
+        if (session_status() !== PHP_SESSION_ACTIVE && session_id() !== '' && !headers_sent()) {
+            session_id('');
+        }
     }
 
     /**
