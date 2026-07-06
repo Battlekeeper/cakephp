@@ -174,6 +174,10 @@ class Server implements EventDispatcherInterface
             $request->getSession()->close();
         }
 
+        if ($this->workerMode) {
+            $response = $this->flushNativeHeaders($response);
+        }
+
         return $response;
     }
 
@@ -472,6 +476,46 @@ class Server implements EventDispatcherInterface
         $parsedBody = $request->getParsedBody();
         $_POST = is_array($parsedBody) ? $parsedBody : [];
         $this->populatedSuperglobals = true;
+    }
+
+    /**
+     * Merge PHP's native header buffer into a PSR-7 response and clear the buffer.
+     *
+     * In long-lived worker processes PHP's SAPI never flushes headers on its
+     * own, so any header() or setcookie() call made during the request cycle —
+     * most importantly the Set-Cookie header emitted by session_start() for
+     * the PHPSESSID — would be silently discarded if not captured here.
+     *
+     * All queued native headers are transferred to the PSR-7 response using
+     * withAddedHeader() so that multiple Set-Cookie values can coexist. The
+     * native buffer is then cleared via header_remove() so that the
+     * application-server worker (e.g. RoadRunner's PSR7Worker) does not
+     * encounter them a second time and produce duplicates.
+     *
+     * @param \Psr\Http\Message\ResponseInterface $response The response to enrich.
+     * @return \Psr\Http\Message\ResponseInterface
+     */
+    protected function flushNativeHeaders(ResponseInterface $response): ResponseInterface
+    {
+        $nativeHeaders = headers_list();
+        if (!$nativeHeaders) {
+            return $response;
+        }
+
+        header_remove();
+
+        foreach ($nativeHeaders as $header) {
+            [$name, $value] = explode(':', $header, 2);
+            $name = trim($name);
+            $value = trim($value);
+            // Use withAddedHeader so that multiple Set-Cookie lines are
+            // preserved.  For other header names this may create duplicates
+            // only when both PHP's session layer and CakePHP's response
+            // pipeline set the same header, which is rare and harmless.
+            $response = $response->withAddedHeader($name, $value);
+        }
+
+        return $response;
     }
 
     /**
