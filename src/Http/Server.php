@@ -75,6 +75,14 @@ class Server implements EventDispatcherInterface
     protected bool $workerMode = false;
 
     /**
+     * Whether superglobals were populated from a PSR-7 request for the current
+     * request cycle. Used by resetWorkerState() to know whether to clear them.
+     *
+     * @var bool
+     */
+    protected bool $populatedSuperglobals = false;
+
+    /**
      * Snapshot of request-scoped I18n defaults captured after application bootstrap.
      *
      * Keyed by the static property name; used by resetWorkerState() to restore
@@ -142,6 +150,7 @@ class Server implements EventDispatcherInterface
         $request = $request ?: ServerRequestFactory::fromGlobals();
         if (!($request instanceof ServerRequest)) {
             $request = ServerRequestFactory::fromPsr7Request($request);
+            $this->populateRequestSuperglobals($request);
         }
 
         if ($middlewareQueue === null) {
@@ -318,6 +327,19 @@ class Server implements EventDispatcherInterface
      */
     public function resetWorkerState(): void
     {
+        // Clear superglobals that were populated from the PSR-7 request so
+        // that one request's cookies, query params, and server data cannot
+        // bleed into the next request.  This is especially important for
+        // $_COOKIE: leaving it populated would allow the next request to
+        // accidentally resume the previous user's session.
+        if ($this->populatedSuperglobals) {
+            $_SERVER = [];
+            $_COOKIE = [];
+            $_GET = [];
+            $_POST = [];
+            $this->populatedSuperglobals = false;
+        }
+
         // Restore the I18n locale to whatever it was when the application
         // first booted. I18n::getDefaultLocale() captures the initial value
         // lazily on first call and never changes it, so this always restores
@@ -418,6 +440,38 @@ class Server implements EventDispatcherInterface
     public function getApp(): HttpApplicationInterface
     {
         return $this->app;
+    }
+
+    /**
+     * Populate PHP superglobals from a CakePHP ServerRequest.
+     *
+     * In long-lived worker processes (RoadRunner, Swoole, etc.) PHP never
+     * receives a new SAPI request so superglobals are never re-populated by
+     * the runtime. Any code — framework, library, or application — that reads
+     * $_SERVER, $_COOKIE, $_GET, or $_POST directly will otherwise see stale
+     * data from the previous request (or the worker boot environment).
+     *
+     * Populating $_COOKIE is especially critical: PHP's built-in session
+     * engine reads the session ID from $_COOKIE[session_name()] inside
+     * session_start(). If $_COOKIE is empty every request gets a brand-new
+     * session, breaking authentication and flash messages.
+     *
+     * This method is called automatically by run() whenever it converts an
+     * incoming PSR-7 ServerRequestInterface into a Cake\Http\ServerRequest.
+     * resetWorkerState() clears these superglobals after each request cycle
+     * to ensure one request's data cannot leak into the next.
+     *
+     * @param \Cake\Http\ServerRequest $request The fully-built CakePHP request.
+     * @return void
+     */
+    protected function populateRequestSuperglobals(ServerRequest $request): void
+    {
+        $_SERVER = $request->getServerParams();
+        $_COOKIE = $request->getCookieParams();
+        $_GET = $request->getQueryParams();
+        $parsedBody = $request->getParsedBody();
+        $_POST = is_array($parsedBody) ? $parsedBody : [];
+        $this->populatedSuperglobals = true;
     }
 
     /**
