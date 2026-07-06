@@ -1,0 +1,133 @@
+# RoadRunner Configuration for CakePHP
+#
+# Copy this file to your project root (next to composer.json) as .rr.yaml
+# and run:
+#
+#   ./rr serve
+#
+# Or point RoadRunner at this file explicitly:
+#
+#   ./rr serve -c roadrunner/.rr.yaml
+#
+# Download the RoadRunner binary using the bundled installer:
+#
+#   ./vendor/bin/rr get-binary
+#
+# See https://roadrunner.dev/docs/intro-config for all available options.
+
+version: "3"
+
+# -----------------------------------------------------------------------
+# RPC server
+#
+# Used by the `rr` CLI tool and the spiral/roadrunner PHP package to
+# communicate with the running server (e.g. to reload workers or query
+# server metrics without a restart).
+# -----------------------------------------------------------------------
+rpc:
+  listen: tcp://127.0.0.1:6001
+
+# -----------------------------------------------------------------------
+# PHP worker pool
+#
+# RoadRunner starts `num_workers` PHP processes and keeps them alive
+# between requests. Set `command` to the path of the worker script
+# relative to your project root.
+# -----------------------------------------------------------------------
+server:
+  command: "php roadrunner/worker.php"
+  relay: "pipes"
+
+  # Pass environment variables to every PHP worker process.
+  # env:
+  #   APP_ENV: production
+  #   MAX_REQUESTS: 500
+
+# -----------------------------------------------------------------------
+# HTTP server
+#
+# Replace "0.0.0.0:8080" with the address you want RoadRunner to bind to.
+# For TLS termination, place a reverse proxy (nginx, Caddy, etc.) in front
+# of RoadRunner and forward plain HTTP to this port.
+# -----------------------------------------------------------------------
+http:
+  address: "0.0.0.0:8080"
+
+  # Enable gzip compression and static-file serving middleware.
+  middleware: ["static", "gzip"]
+
+  # Serve static assets directly from the CakePHP webroot without
+  # involving a PHP worker. Adjust `dir` to match your project layout.
+  static:
+    dir: "webroot"
+    # Never pass PHP scripts or .htaccess files through the static handler.
+    forbid: [".php", ".htaccess"]
+
+  # Trusted proxies for X-Forwarded-* header processing.
+  # Uncomment and populate when RoadRunner sits behind a load balancer.
+  # trusted_subnets:
+  #   - "10.0.0.0/8"
+  #   - "172.16.0.0/12"
+  #   - "192.168.0.0/16"
+
+  pool:
+    # Number of PHP worker processes to spawn.
+    # Defaults to the number of logical CPU cores when omitted.
+    # num_workers: 4
+
+    # Restart a worker after it has handled this many requests.
+    # Mitigates slow memory leaks in third-party libraries. An
+    # equivalent PHP-level guard can be set via the MAX_REQUESTS
+    # environment variable in the `server.env` section above.
+    # max_jobs: 500
+
+    # Allocate time (in seconds) for a worker to complete an in-flight
+    # request before RoadRunner forcibly terminates it during a reload.
+    # destroy_timeout: 30
+
+    supervisor:
+      # Forcibly restart a worker process that exceeds this memory
+      # threshold (in megabytes). Useful as a backstop against leaks.
+      max_worker_memory: 128
+
+      # Interval (in seconds) between supervisor health checks.
+      # watch_tick: 1
+
+# -----------------------------------------------------------------------
+# Logging
+#
+# Use mode "development" locally (human-readable, colour output) and
+# "production" in deployed environments (structured JSON output).
+# -----------------------------------------------------------------------
+logs:
+  mode: development
+  level: debug
+
+# -----------------------------------------------------------------------
+# Production example
+#
+# Bind to all interfaces on port 8080, spawn 8 workers, rotate them
+# after 1 000 requests, and output structured JSON logs.
+# -----------------------------------------------------------------------
+# version: "3"
+# rpc:
+#   listen: tcp://127.0.0.1:6001
+# server:
+#   command: "php roadrunner/worker.php"
+#   relay: "pipes"
+#   env:
+#     APP_ENV: production
+# http:
+#   address: "0.0.0.0:8080"
+#   middleware: ["static", "gzip"]
+#   static:
+#     dir: "webroot"
+#     forbid: [".php", ".htaccess"]
+#   pool:
+#     num_workers: 8
+#     max_jobs: 1000
+#     supervisor:
+#       max_worker_memory: 128
+# logs:
+#   mode: production
+#   level: warn
