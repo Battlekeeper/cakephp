@@ -317,6 +317,24 @@ class CollectionTest extends TestCase
         $this->assertEquals(['a' => 1, 'b' => 2, 'c' => 1, 'd' => 2, 'e' => 1, 'f' => 3], iterator_to_array($result));
     }
 
+    public function testUniqueWithDuplicateKeysFromUnfold(): void
+    {
+        $items = [
+            ['items' => [['id' => 1], ['id' => 2], ['id' => 3]]],
+            ['items' => [['id' => 2], ['id' => 3]]],
+            ['items' => [['id' => 21], ['id' => 22]]],
+        ];
+
+        $result = collection($items)
+            ->extract('items')
+            ->unfold()
+            ->extract('id')
+            ->unique()
+            ->toList();
+
+        $this->assertSame([1, 2, 3, 21, 22], $result);
+    }
+
     /**
      * Tests every when the callback returns true for all elements
      */

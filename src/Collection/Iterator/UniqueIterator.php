@@ -43,12 +43,23 @@ class UniqueIterator extends Collection
     {
         $unique = [];
         $uniqueValues = [];
+
         foreach ($items as $k => $v) {
             $compareValue = $callback($v, $k);
-            if (!in_array($compareValue, $uniqueValues, true)) {
-                $unique[$k] = $v;
-                $uniqueValues[] = $compareValue;
+
+            if (in_array($compareValue, $uniqueValues, true)) {
+                continue;
             }
+
+            if (array_key_exists($k, $unique)) {
+                // Duplicate key: append this value instead of overwriting.
+                $unique[] = $v;
+            } else {
+                // Safe key: preserve it.
+                $unique[$k] = $v;
+            }
+
+            $uniqueValues[] = $compareValue;
         }
 
         parent::__construct($unique);
